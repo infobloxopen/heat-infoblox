@@ -1,2 +1,2 @@
-
+HEAT_INFOBLOX_DIR=$DEST/heat-infoblox
 enable_service heat-infoblox
