@@ -1,7 +1,9 @@
 # plugin.sh - DevStack plugin.sh dispatch script heat_infoblox
 
 function install_heat_infoblox {
-    echo
+    cd $HEAT_INFOBLOX_DIR
+    #sudo python setup.py install
+    python setup.py install
 }
 
 function init_heat_infoblox {
@@ -9,11 +11,7 @@ function init_heat_infoblox {
 }
 
 function configure_heat_infoblox {
-    echo "Adding $HEAT_INFOBLOX_DIR/heat_infoblox to plugins_dir in $HEAT_CONF"
-    echo >> $HEAT_CONF
-    echo "# Added by heat-infoblox" >> $HEAT_CONF
-    echo "[DEFAULT]" >> $HEAT_CONF
-    echo "plugin_dirs=$HEAT_INFOBLOX_DIR/heat_infoblox,/usr/lib64/heat,/usr/lib/heat" >> $HEAT_CONF
+    iniset $HEAT_CONF DEFAULT plugin_dirs "$HEAT_INFOBLOX_DIR/heat_infoblox,/usr/lib64/heat,/usr/lib/heat"
 }
 
 # check for service enabled

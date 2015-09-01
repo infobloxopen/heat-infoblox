@@ -13,54 +13,19 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import random
-import string
-
-import six
-
-from heat.common import exception
 from heat.common.i18n import _
-from heat.engine import attributes
 from heat.engine import constraints
 from heat.engine import properties
 from heat.engine import resource
 from heat.engine import support
 
+from heat_infoblox import resource_utils
 
-def port_schema(port_name, is_required):
-    return properties.Schema(
-        properties.Schema.MAP,
-        schema={
-            "network": properties.Schema(
-                properties.Schema.STRING,
-                _('Name or ID of network to which to attach the %s port.') % port_name, 
-                constraints=[
-                    constraints.CustomConstraint('neutron.network')
-                ]
-            ),
-            "fixed_ip": properties.Schema(
-                properties.Schema.STRING,
-                _('Fixed IP address to specify for the %s port.') % port_name,
-                constraints=[
-                    constraints.CustomConstraint('ip_addr')
-                ]
-            ),
-            "port": properties.Schema(
-                properties.Schema.STRING,
-                _('ID of an existing Neutron port to associate with the %s port.') % port_name, 
-                constraints=[
-                    constraints.CustomConstraint('neutron.port')
-                ]
-            ),
-        },
-        required=is_required
-    )
 
 class GridMember(resource.Resource):
-    '''
-    A resource which represents an Infoblox Grid Member.
+    '''A resource which represents an Infoblox Grid Member.
 
-    This is used to provision new grid members on an existing grid. See the 
+    This is used to provision new grid members on an existing grid. See the
     Grid Master resource to create a new grid.
     '''
 
@@ -79,7 +44,9 @@ class GridMember(resource.Resource):
         ),
         "wapi_insecure_ignore_invalid_certificate": properties.Schema(
             properties.Schema.BOOLEAN,
-            _('Do not require the certificate for validating the WAPI URL. This is NOT SECURE and should not be used in a production environment.'),
+            _('Do not require the certificate for validating the WAPI URL. '
+              'This is NOT SECURE and should not be used in a production '
+              'environment.'),
             default=False,
             required=False
         ),
@@ -117,19 +84,17 @@ class GridMember(resource.Resource):
             properties.Schema.STRING,
             _('Name of the availability zone for server placement.')
         ),
-        "MGMT": port_schema("MGMT", True),
-        "LAN1": port_schema("LAN1", True),
+        "MGMT": resource_utils.port_schema("MGMT", True),
+        "LAN1": resource_utils.port_schema("LAN1", True),
         "admin_pass": properties.Schema(
             properties.Schema.STRING,
             _('The administrator password for the server.'),
         ),
     }
 
-    attributes_schema = {
-    }
-
     def handle_create(self):
         self.resource_id_set(self.physical_resource_name())
+
 
 def resource_mapping():
     return {
