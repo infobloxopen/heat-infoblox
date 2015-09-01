@@ -2,8 +2,7 @@
 
 function install_heat_infoblox {
     cd $HEAT_INFOBLOX_DIR
-    #sudo python setup.py install
-    python setup.py install
+    sudo python setup.py install
 }
 
 function init_heat_infoblox {
