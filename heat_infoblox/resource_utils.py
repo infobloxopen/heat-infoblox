@@ -17,36 +17,26 @@ from heat.common.i18n import _
 from heat.engine import constraints
 from heat.engine import properties
 
+from heat_infoblox import connector
+from heat_infoblox import object_manipulator
+
 """Utilities for specifying resources."""
 
 
 def port_schema(port_name, is_required):
     return properties.Schema(
-        properties.Schema.MAP,
-        schema={
-            "network": properties.Schema(
-                properties.Schema.STRING,
-                _('Name or ID of network to which to attach the %s port.')
-                % port_name,
-                constraints=[
-                    constraints.CustomConstraint('neutron.network')
-                ]
-            ),
-            "fixed_ip": properties.Schema(
-                properties.Schema.STRING,
-                _('Fixed IP address to specify for the %s port.') % port_name,
-                constraints=[
-                    constraints.CustomConstraint('ip_addr')
-                ]
-            ),
-            "port": properties.Schema(
-                properties.Schema.STRING,
-                _('ID of an existing port to associate with the %s port.')
-                % port_name,
-                constraints=[
-                    constraints.CustomConstraint('neutron.port')
-                ]
-            ),
-        },
-        required=is_required
-    )
+            properties.Schema.STRING,
+            _('ID of an existing port to associate with the %s port.')
+            % port_name,
+            constraints=[
+                constraints.CustomConstraint('neutron.port')
+            ],
+            required=is_required
+        )
+
+
+def connect_to_infoblox(url, username, password, verify, cert):
+    return object_manipulator.InfobloxObjectManipulator(
+        connector.Infoblox({"url": url, "username": username,
+                            "password": password, "sslverify": verify,
+                            "certificate": cert}))
