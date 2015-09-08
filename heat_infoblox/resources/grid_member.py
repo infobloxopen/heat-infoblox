@@ -53,10 +53,48 @@ class GridMember(resource.Resource):
     )
 
     ATTRIBUTES = (
-        JOIN_TOKEN, USER_DATA
+        USER_DATA
     ) = (
-        'grid_join_token', 'user_data'
+        'user_data'
     )
+
+    ALLOWED_MODELS = (
+        'CP-V1400',
+        'CP-V2200',
+        'CP-V800',
+        'IB-VM-100',
+        'IB-VM-1410',
+        'IB-VM-1420',
+        'IB-VM-2210',
+        'IB-VM-2220',
+        'IB-VM-4010',
+        'IB-VM-810',
+        'IB-VM-820',
+        'IB-VM-RSP',
+        'Rev1',
+        'Rev2'
+    )
+
+    ALLOWED_LICENSES_PRE_PROVISION = (
+        'cloud_api',
+        'dhcp',
+        'dns',
+        'dtc',
+        'enterprise',
+        'fireeye',
+        'ms_management',
+        'rpz',
+        'vnios')
+
+    ALLOWED_LICENSES_TEMP = (
+        'dns', 
+        'rpz', 
+        'cloud', 
+        'cloud_api',
+        'enterprise', 
+        'ipam', 
+        'vnios', 
+        'reporting')
 
     support_status = support.SupportStatus(support.UNSUPPORTED)
 
@@ -96,20 +134,29 @@ class GridMember(resource.Resource):
         MODEL: properties.Schema(
             properties.Schema.STRING,
             _('Infoblox model name.'),
+            constraints=[
+                constraints.AllowedValues(ALLOWED_MODELS)
+            ]
         ),
         LICENSES: properties.Schema(
             properties.Schema.LIST,
             _('List of licenses to pre-provision.'),
             schema=properties.Schema(
                 properties.Schema.STRING
-            )
+            ),
+            constraints=[
+                constraints.AllowedValues(ALLOWED_LICENSES_PRE_PROVISION)
+            ]
         ),
         TEMP_LICENSES: properties.Schema(
             properties.Schema.LIST,
             _('List of temporary licenses to apply to the member.'),
             schema=properties.Schema(
                 properties.Schema.STRING
-            )
+            ),
+            constraints=[
+                constraints.AllowedValues(ALLOWED_LICENSES_TEMP)
+            ]
         ),
         REMOTE_CONSOLE: properties.Schema(
             properties.Schema.BOOLEAN,
@@ -128,9 +175,7 @@ class GridMember(resource.Resource):
         NAT_IP: properties.Schema(
             properties.Schema.STRING,
             _('If the GM will see this member as a NATed address, enter that '
-              'address here. Or, enter a the name or ID of the external network'
-              ' through which the GM will be accessed, and the NAT IP will be '
-              'looked up in the Neutron router for the LAN1 port.'),
+              'address here.'),
             required=False
         ),
         MGMT_PORT: resource_utils.port_schema(MGMT_PORT, False),
@@ -138,9 +183,6 @@ class GridMember(resource.Resource):
     }
 
     attributes_schema = {
-        JOIN_TOKEN: attributes.Schema(
-            _('Grid join authentication token.'),
-            type=attributes.Schema.STRING),
         USER_DATA: attributes.Schema(
             _('User data for the Nova boot process.'),
             type=attributes.Schema.STRING)
@@ -238,8 +280,6 @@ class GridMember(resource.Resource):
             return_fields=['vip_setting', 'ipv6_setting'])[0]
         token = self._get_member_tokens(member)
         LOG.debug("MEMBER for %s = %s" % (name, member))
-        if name == self.JOIN_TOKEN:
-            return token
         if name == self.USER_DATA:
             return self._make_user_data(member, token)
         return None
