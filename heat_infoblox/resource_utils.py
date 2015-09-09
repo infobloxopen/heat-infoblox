@@ -25,14 +25,14 @@ from heat_infoblox import object_manipulator
 
 def port_schema(port_name, is_required):
     return properties.Schema(
-            properties.Schema.STRING,
-            _('ID of an existing port to associate with the %s port.')
-            % port_name,
-            constraints=[
-                constraints.CustomConstraint('neutron.port')
-            ],
-            required=is_required
-        )
+        properties.Schema.STRING,
+        _('ID of an existing port to associate with the %s port.')
+        % port_name,
+        constraints=[
+            constraints.CustomConstraint('neutron.port')
+        ],
+        required=is_required
+    )
 
 
 def connect_to_infoblox(url, username, password, verify, cert):

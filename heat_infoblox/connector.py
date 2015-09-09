@@ -45,7 +45,7 @@ class Infoblox(object):
 
         reqd_opts = ['url', 'username', 'password']
         default_opts = {'http_pool_connections': 5,
-                        'http_pool_maxsize': 20, 
+                        'http_pool_maxsize': 20,
                         'certificate': None}
         for opt in reqd_opts + default_opts.keys():
             setattr(self, opt, options.get(opt) or default_opts.get(opt))

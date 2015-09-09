@@ -41,7 +41,7 @@ class GridMember(resource.Resource):
         WAPI_NOSSLVERIFY, WAPI_CERTIFICATE,
         NAME, MODEL, LICENSES, TEMP_LICENSES, REMOTE_CONSOLE,
         MGMT_PORT, LAN1_PORT, LAN2_PORT, HA_PORT,
-        GM_IP, GM_CERTIFICATE, 
+        GM_IP, GM_CERTIFICATE,
         NAT_IP
     ) = (
         'wapi_url', 'wapi_username', 'wapi_password',
@@ -87,13 +87,13 @@ class GridMember(resource.Resource):
         'vnios')
 
     ALLOWED_LICENSES_TEMP = (
-        'dns', 
-        'rpz', 
-        'cloud', 
+        'dns',
+        'rpz',
+        'cloud',
         'cloud_api',
-        'enterprise', 
-        'ipam', 
-        'vnios', 
+        'enterprise',
+        'ipam',
+        'vnios',
         'reporting')
 
     support_status = support.SupportStatus(support.UNSUPPORTED)
@@ -191,18 +191,25 @@ class GridMember(resource.Resource):
     def _make_network_settings(self, ip):
         subnet = self.client('neutron').show_subnet(ip['subnet_id'])['subnet']
         ipnet = netaddr.IPNetwork(subnet['cidr'])
-        return {'address': ip['ip_address'], 'subnet_mask': str(ipnet.netmask),
-            'gateway': subnet['gateway_ip']}
+        return {
+            'address': ip['ip_address'],
+            'subnet_mask': str(ipnet.netmask),
+            'gateway': subnet['gateway_ip']
+        }
 
     def _make_ipv6_settings(self, ip):
         subnet = self.client('neutron').show_subnet(ip['subnet_id'])['subnet']
-        autocfg = (subnet['ipv6_ra_mode'] != "stateful")
-        return {'virtual_ip': ip['ip_address'], 'cidr_prefix': subnet['cidr'],
-            'gateway': subnet['gateway_ip'], 'enabled': True, 
-            'auto_router_config_enabled': autocfg }
-    
+        prefix = netaddr.IPNetwork(subnet['cidr'])
+        autocfg = subnet['ipv6_ra_mode'] == "slaac"
+        return {
+            'virtual_ip': ip['ip_address'],
+            'cidr_prefix': int(prefix.prefixlen),
+            'gateway': subnet['gateway_ip'], 'enabled': True,
+            'auto_router_config_enabled': autocfg
+        }
+
     def infoblox(self):
-        if not getattr(self,'infoblox_object', None):
+        if not getattr(self, 'infoblox_object', None):
             self.infoblox_object = resource_utils.connect_to_infoblox(
                 self.properties[self.WAPI_URL],
                 self.properties[self.WAPI_USERNAME],
@@ -223,20 +230,20 @@ class GridMember(resource.Resource):
                 if ipv4 is None:
                     ipv4 = self._make_network_settings(ip)
 
-        LOG.debug("ipv4 = %s, ipv6 = %s" % (ipv4, ipv6))
-        #TODO(jbelamaric): fix IPv6
-        ipv6 = None
-
         name = self.properties[self.NAME]
         nat = self.properties[self.NAT_IP]
-        if nat == "AUTO":
-            raise ValueError("AUTO is not yet supported for %s." % self.NAT_IP)
-        self.infoblox().create_member(name=name, ipv4=ipv4, ipv6=ipv6, nat_ip=nat)
-        self.infoblox().pre_provision_member(name,
+
+        self.infoblox().create_member(name=name, ipv4=ipv4,
+                                      ipv6=ipv6, nat_ip=nat)
+        self.infoblox().pre_provision_member(
+            name,
             hwmodel=self.properties[self.MODEL], hwtype='IB-VNIOS',
             licenses=self.properties[self.LICENSES])
 
         self.resource_id_set(name)
+
+    def handle_delete(self):
+        self.infoblox().delete_member(self.properties[self.NAME])
 
     def _make_user_data(self, member, token):
         user_data = '#infoblox-config\n\n'
@@ -250,39 +257,68 @@ class GridMember(resource.Resource):
             user_data += 'remote_console_enabled: %s\n' % remote_console
 
         vip = member['vip_setting']
-        if vip:
+        ipv6 = member['ipv6_setting']
+        if not ipv6['enabled']:
+            ipv6 = None
+
+        LOG.debug('vip: %s, ipv6: %s' % (vip, ipv6))
+
+        if vip or ipv6:
             user_data += 'lan1:\n'
+
+        LOG.debug('user_data: %s' % user_data)
+
+        if vip:
             user_data += '  v4_addr: %s\n' % vip['address']
             user_data += '  v4_netmask: %s\n' % vip['subnet_mask']
             user_data += '  v4_gw: %s\n' % vip['gateway']
+
+        LOG.debug('user_data: %s' % user_data)
+
+        if ipv6:
+            user_data += '  v6_addr: %s\n' % ipv6['virtual_ip']
+            user_data += '  v6_cidr: %s\n' % ipv6['cidr_prefix']
+            if not ipv6['auto_router_config_enabled']:
+                user_data += '  v6_gw: %s\n' % ipv6['gateway']
+
+        LOG.debug('user_data: %s' % user_data)
 
         if token and len(token) > 0:
             user_data += 'gridmaster:\n'
             user_data += '  token: %s\n' % token[0]['token']
             user_data += '  ip_addr: %s\n' % self.properties[self.GM_IP]
-            user_data += '  certificate: %s\n' % self.properties[self.GM_CERTIFICATE]
+            user_data += '  certificate: %s\n' % self.properties[
+                self.GM_CERTIFICATE
+            ]
+
+        LOG.debug('user_data: %s' % user_data)
 
         return user_data
 
     def _get_member_tokens(self, member):
-        token = self.infoblox().connector.call_func('read_token',
-                        member['_ref'], {})['pnode_tokens']
+        token = self.infoblox().connector.call_func(
+            'read_token',
+            member['_ref'], {})['pnode_tokens']
         if len(token) == 0:
-            self.infoblox().connector.call_func('create_token',
-                        member['_ref'], {})['pnode_tokens']
-            token = self.infoblox().connector.call_func('read_token',
-                        member['_ref'], {})['pnode_tokens']
+            self.infoblox().connector.call_func(
+                'create_token',
+                member['_ref'], {})['pnode_tokens']
+            token = self.infoblox().connector.call_func(
+                'read_token',
+                member['_ref'], {})['pnode_tokens']
         return token
 
     def _resolve_attribute(self, name):
         member_name = self.properties[self.NAME]
-        member = self.infoblox().get_member(member_name,
+        member = self.infoblox().get_member(
+            member_name,
             return_fields=['vip_setting', 'ipv6_setting'])[0]
         token = self._get_member_tokens(member)
         LOG.debug("MEMBER for %s = %s" % (name, member))
         if name == self.USER_DATA:
             return self._make_user_data(member, token)
         return None
+
 
 def resource_mapping():
     return {

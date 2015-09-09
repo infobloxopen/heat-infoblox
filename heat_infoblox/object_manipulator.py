@@ -32,32 +32,40 @@ class InfobloxObjectManipulator(object):
 
     def get_member(self, member_name, return_fields=None, extattrs=None):
         obj = {'host_name': member_name}
-        return self.connector.get_object('member', obj, return_fields, extattrs)
+        return self.connector.get_object(
+            'member', obj, return_fields, extattrs
+        )
 
     def create_member(self, name=None, platform='VNIOS',
                       ipv4=None, ipv6=None, nat_ip=None):
-        member_data = {'host_name': name, 'platform':platform}
+        member_data = {'host_name': name, 'platform': platform}
         extra_data = {}
         if ipv4:
             extra_data['vip_setting'] = ipv4
         if ipv6:
             extra_data['ipv6_setting'] = ipv6
         if nat_ip:
-            extra_data['nat_setting'] = {'enabled': True,
-                'external_virtual_ip': nat_ip}
+            extra_data['nat_setting'] = {
+                'enabled': True,
+                'external_virtual_ip': nat_ip
+            }
         return self._create_infoblox_object('member', member_data, extra_data)
 
     def pre_provision_member(self, member_name,
-                      hwmodel=None, hwtype='IB-VNIOS',
-                      licenses=None):
+                             hwmodel=None, hwtype='IB-VNIOS',
+                             licenses=None):
         if licenses is None:
             licenses = []
         extra_data = {'pre_provisioning': {
-                'hardware_info': [{'hwmodel': hwmodel, 'hwtype': hwtype}],
-                'licenses': licenses}
-            }
+            'hardware_info': [{'hwmodel': hwmodel, 'hwtype': hwtype}],
+            'licenses': licenses}
+        }
         self._update_infoblox_object('member', {'host_name': member_name},
-            extra_data)
+                                     extra_data)
+
+    def delete_member(self, member_name):
+        member_data = {'host_name': member_name}
+        self._delete_infoblox_object('member', member_data)
 
     def create_dns_view(self, net_view_name, dns_view_name):
         dns_view_data = {'name': dns_view_name,
