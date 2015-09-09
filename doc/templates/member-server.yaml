@@ -28,6 +28,7 @@ resources:
       gm_certificate: I agree to bypass the SSL Certification checking, thus using UNSECURE connection to the Grid
       nat_ip: 172.16.98.52
       remote_console_enabled: true
+      admin_password: foobar
   server:
     type: OS::Nova::Server
     properties:
@@ -39,3 +40,5 @@ resources:
 outputs:
   member_address:
     value: { get_attr: [lan1_port, fixed_ips] }
+  user_data:
+    value: { get_attr: [grid_member, user_data] }

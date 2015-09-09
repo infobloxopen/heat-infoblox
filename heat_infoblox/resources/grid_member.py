@@ -39,14 +39,16 @@ class GridMember(resource.Resource):
     PROPERTIES = (
         WAPI_URL, WAPI_USERNAME, WAPI_PASSWORD,
         WAPI_NOSSLVERIFY, WAPI_CERTIFICATE,
-        NAME, MODEL, LICENSES, TEMP_LICENSES, REMOTE_CONSOLE,
+        NAME, MODEL, LICENSES, TEMP_LICENSES,
+        REMOTE_CONSOLE, ADMIN_PASSWORD,
         MGMT_PORT, LAN1_PORT, LAN2_PORT, HA_PORT,
         GM_IP, GM_CERTIFICATE,
         NAT_IP
     ) = (
         'wapi_url', 'wapi_username', 'wapi_password',
         'wapi_insecure_do_not_verify_certificate', 'wapi_certificate',
-        'name', 'model', 'licenses', 'temp_licenses', 'remote_console_enabled',
+        'name', 'model', 'licenses', 'temp_licenses',
+        'remote_console_enabled', 'admin_password',
         'MGMT', 'LAN1', 'LAN2', 'HA',
         'gm_ip', 'gm_certificate',
         'nat_ip'
@@ -162,6 +164,10 @@ class GridMember(resource.Resource):
             properties.Schema.BOOLEAN,
             _('Enable the remote console.')
         ),
+        ADMIN_PASSWORD: properties.Schema(
+            properties.Schema.STRING,
+            _('The password to use for the admin user.')
+        ),
         GM_IP: properties.Schema(
             properties.Schema.STRING,
             _('The Gridmaster IP address.'),
@@ -256,32 +262,28 @@ class GridMember(resource.Resource):
         if remote_console is not None:
             user_data += 'remote_console_enabled: %s\n' % remote_console
 
+        admin_password = self.properties[self.ADMIN_PASSWORD]
+        if admin_password is not None:
+            user_data += 'default_admin_password: %s\n' % admin_password
+
         vip = member['vip_setting']
         ipv6 = member['ipv6_setting']
         if not ipv6['enabled']:
             ipv6 = None
 
-        LOG.debug('vip: %s, ipv6: %s' % (vip, ipv6))
-
         if vip or ipv6:
             user_data += 'lan1:\n'
-
-        LOG.debug('user_data: %s' % user_data)
 
         if vip:
             user_data += '  v4_addr: %s\n' % vip['address']
             user_data += '  v4_netmask: %s\n' % vip['subnet_mask']
             user_data += '  v4_gw: %s\n' % vip['gateway']
 
-        LOG.debug('user_data: %s' % user_data)
-
         if ipv6:
             user_data += '  v6_addr: %s\n' % ipv6['virtual_ip']
             user_data += '  v6_cidr: %s\n' % ipv6['cidr_prefix']
             if not ipv6['auto_router_config_enabled']:
                 user_data += '  v6_gw: %s\n' % ipv6['gateway']
-
-        LOG.debug('user_data: %s' % user_data)
 
         if token and len(token) > 0:
             user_data += 'gridmaster:\n'
