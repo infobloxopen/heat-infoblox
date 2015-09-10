@@ -1,0 +1,65 @@
+heat_template_version: 2014-10-16
+description: An Infoblox Grid Member
+parameters:
+  mgmt_network:
+    type: string
+    description: the network for management
+  lan1_network:
+    type: string
+    description: the network for serving protocols
+  external_network:
+    type: string
+    description: the external network for floating IP allocations
+    default: public
+  parent_stack_id:
+    type: string
+    description: the stack ID of the calling stack
+resources:
+  host_name:
+    type: OS::Heat::RandomString
+    properties:
+      length: 12
+      sequence: lowercase
+
+# We pre-allocate the port for LAN1, so that we have the IP address already for
+# injection via user_data
+  lan1_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_param: lan1_network }
+
+# If the GM is outside the cloud, each member needs its own floating IP so that
+# they are associated with separate NAT addresses.
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: external_network }
+      port_id: { get_resource: lan1_port }
+
+  grid_member:
+    type: Infoblox::Grid::Member
+    properties:
+      wapi_url: https://172.16.98.100/wapi/v2.2/
+      wapi_username: admin
+      wapi_password: infoblox
+      wapi_insecure_do_not_verify_certificate: True
+      name: { list_join: [ '.', [{ list_join: [ '-', [ 'nios', { get_resource: host_name } ]] }, 'localdomain' ]] }
+      model: IB-VM-810
+      LAN1: { get_resource: lan1_port }
+      licenses: ["vnios", "dns", "enterprise"]
+      temp_licenses: ["vnios", "dns", "enterprise"]
+      gm_ip: 172.16.98.100
+      gm_certificate: I agree to bypass the SSL Certification checking, thus using UNSECURE connection to the Grid
+      nat_ip: { get_attr: [ floating_ip, floating_ip_address ] }
+      remote_console_enabled: true
+      admin_password: foobar
+
+  server:
+    type: OS::Nova::Server
+    properties:
+      flavor: vnios8xx.55
+      image: nios-7.2.0-demo-8xx-55.qcow2
+      networks: [{network: {get_param: mgmt_network} }, {port: { get_resource: lan1_port}} ]
+      user_data_format: RAW
+      user_data: { get_attr: [grid_member, user_data] }
+      metadata: {"metering.stack": {get_param: parent_stack_id}}
