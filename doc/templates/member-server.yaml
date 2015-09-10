@@ -7,11 +7,32 @@ parameters:
   lan1_network:
     type: string
     description: the network for serving protocols
+  external_network:
+    type: string
+    description: the external network for floating IP allocations
+    default: public
 resources:
+  host_name:
+    type: OS::Heat::RandomString
+    properties:
+      length: 12
+      sequence: lowercase
+
+# We pre-allocate the port for LAN1, so that we have the IP address already for
+# injection via user_data
   lan1_port:
     type: OS::Neutron::Port
     properties:
       network: { get_param: lan1_network }
+
+# If the GM is outside the cloud, each member needs its own floating IP so that
+# they are associated with separate NAT addresses.
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: external_network }
+      port_id: { get_resource: lan1_port }
+
   grid_member:
     type: Infoblox::Grid::Member
     properties:
@@ -19,16 +40,17 @@ resources:
       wapi_username: admin
       wapi_password: infoblox
       wapi_insecure_do_not_verify_certificate: True
-      name: nios-test.infoblox.local
+      name: { list_join: [ '.', [{ list_join: [ '-', [ 'nios', { get_resource: host_name } ]] }, 'localdomain' ]] }
       model: IB-VM-810
       LAN1: { get_resource: lan1_port }
       licenses: ["vnios", "dns", "enterprise"]
       temp_licenses: ["vnios", "dns", "enterprise"]
       gm_ip: 172.16.98.100
       gm_certificate: I agree to bypass the SSL Certification checking, thus using UNSECURE connection to the Grid
-      nat_ip: 172.16.98.52
+      nat_ip: { get_attr: [ floating_ip, floating_ip_address ] }
       remote_console_enabled: true
       admin_password: foobar
+
   server:
     type: OS::Nova::Server
     properties:

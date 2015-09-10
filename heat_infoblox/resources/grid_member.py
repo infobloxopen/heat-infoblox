@@ -258,32 +258,45 @@ class GridMember(resource.Resource):
         if temp_licenses and len(temp_licenses) > 0:
             user_data += 'temp_license: %s\n' % ','.join(temp_licenses)
 
+        LOG.info('user_data: %s' % user_data)
+
         remote_console = self.properties[self.REMOTE_CONSOLE]
         if remote_console is not None:
             user_data += 'remote_console_enabled: %s\n' % remote_console
+
+        LOG.info('user_data: %s' % user_data)
 
         admin_password = self.properties[self.ADMIN_PASSWORD]
         if admin_password is not None:
             user_data += 'default_admin_password: %s\n' % admin_password
 
-        vip = member['vip_setting']
-        ipv6 = member['ipv6_setting']
-        if not ipv6['enabled']:
+        LOG.info('MEMBER: %s' % member)
+        LOG.info('user_data: %s' % user_data)
+
+        vip = member.get('vip_setting', None)
+        ipv6 = member.get('ipv6_setting', None)
+        if ipv6 and not ipv6.get('enabled', False):
             ipv6 = None
 
         if vip or ipv6:
             user_data += 'lan1:\n'
+
+        LOG.info('user_data: %s' % user_data)
 
         if vip:
             user_data += '  v4_addr: %s\n' % vip['address']
             user_data += '  v4_netmask: %s\n' % vip['subnet_mask']
             user_data += '  v4_gw: %s\n' % vip['gateway']
 
+        LOG.info('user_data: %s' % user_data)
+
         if ipv6:
             user_data += '  v6_addr: %s\n' % ipv6['virtual_ip']
             user_data += '  v6_cidr: %s\n' % ipv6['cidr_prefix']
             if not ipv6['auto_router_config_enabled']:
                 user_data += '  v6_gw: %s\n' % ipv6['gateway']
+
+        LOG.info('user_data: %s' % user_data)
 
         if token and len(token) > 0:
             user_data += 'gridmaster:\n'
@@ -293,7 +306,7 @@ class GridMember(resource.Resource):
                 self.GM_CERTIFICATE
             ]
 
-        LOG.debug('user_data: %s' % user_data)
+        LOG.info('user_data: %s' % user_data)
 
         return user_data
 
@@ -311,12 +324,16 @@ class GridMember(resource.Resource):
         return token
 
     def _resolve_attribute(self, name):
+        LOG.info("IN RESOLVE_ATTRIBUTE")
         member_name = self.properties[self.NAME]
+        LOG.info(member_name)
         member = self.infoblox().get_member(
             member_name,
             return_fields=['vip_setting', 'ipv6_setting'])[0]
+        LOG.info(member)
         token = self._get_member_tokens(member)
-        LOG.debug("MEMBER for %s = %s" % (name, member))
+        LOG.info(token)
+        LOG.info("MEMBER for %s = %s" % (name, member))
         if name == self.USER_DATA:
             return self._make_user_data(member, token)
         return None
