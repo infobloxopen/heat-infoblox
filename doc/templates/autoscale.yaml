@@ -11,12 +11,20 @@ parameters:
     type: string
     description: the network for the public floating IPs (with external GM)
     default: public
+  min_members:
+    type: number
+    description: the minimum number of members to keep alive
+    default: 2
+  max_members:
+    type: number
+    description: the maximum number of members allowed in the stack
+    default: 5
 resources:
   nios_member_group:
     type: OS::Heat::AutoScalingGroup
     properties:
-      min_size: 2
-      max_size: 5
+      min_size: {get_param: min_members}
+      max_size: {get_param: max_members}
       resource:
         type: autoscale-member.yaml
         properties:
@@ -29,24 +37,24 @@ resources:
     properties:
       adjustment_type: change_in_capacity
       auto_scaling_group_id: {get_resource: nios_member_group}
-      cooldown: 30
+      cooldown: 120
       scaling_adjustment: 1
   scaledown_policy:
     type: OS::Heat::ScalingPolicy
     properties:
       adjustment_type: change_in_capacity
       auto_scaling_group_id: {get_resource: nios_member_group}
-      cooldown: 30
+      cooldown: 600
       scaling_adjustment: -1
   cpu_alarm_high:
     type: OS::Ceilometer::Alarm
     properties:
-      description: If the avg CPU > 20% for 30 seconds then scale up
+      description: If the avg CPU > 30% for 120 seconds then scale up
       meter_name: cpu_util
       statistic: avg
-      period: 30
+      period: 120
       evaluation_periods: 1
-      threshold: 20
+      threshold: 30
       alarm_actions:
         - {get_attr: [scaleup_policy, alarm_url]}
       matching_metadata: {'metadata.user_metadata.stack': {get_param: "OS::stack_id"}}
@@ -54,10 +62,10 @@ resources:
   cpu_alarm_low:
     type: OS::Ceilometer::Alarm
     properties:
-      description: If the avg CPU < 5% for 90 seconds then scale down
+      description: If the avg CPU < 5% for 120 seconds then scale down
       meter_name: cpu_util
       statistic: avg
-      period: 90
+      period: 120
       evaluation_periods: 1
       threshold: 5
       alarm_actions:
