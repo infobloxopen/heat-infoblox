@@ -13,6 +13,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import copy
 import mock
 
 from oslo_config import cfg
@@ -36,7 +37,8 @@ grid_member_template = {
                 'name': 'my-name',
                 'wapi_url': 'https://127.0.0.1/wapi/v2.2/',
                 'gm_ip': '10.1.1.2',
-                'gm_certificate': 'testing'
+                'gm_certificate': 'testing',
+                'LAN1': 'abc123'
             }
         }
     }
@@ -48,11 +50,7 @@ class GridMemberTest(common.HeatTestCase):
         super(GridMemberTest, self).setUp()
 
         self.ctx = utils.dummy_context()
-
-        self.stack = stack.Stack(
-            self.ctx, 'grid_member_test_stack',
-            template.Template(grid_member_template)
-        )
+        self.set_stack(grid_member_template)
 
         self.base_member = {
             'host_name': 'host.name',
@@ -82,6 +80,11 @@ class GridMemberTest(common.HeatTestCase):
         self.ipv4_6_member = self.base_member.copy()
         self.ipv4_6_member['ipv6_setting'] = self.ipv6_member['ipv6_setting']
 
+    def set_stack(self, stack_template):
+        self.stack = stack.Stack(
+            self.ctx, 'grid_member_test_stack',
+            template.Template(stack_template)
+        )
         self.my_member = self.stack['my_member']
         self.my_member.infoblox_object = mock.MagicMock()
         self.my_member._get_member_tokens = mock.MagicMock()
@@ -151,3 +154,89 @@ class GridMemberTest(common.HeatTestCase):
             '  certificate: testing\n',
             ud
         )
+
+    def test_temp_licenses_none(self):
+        self.set_member(self.base_member)
+        self.set_token(['a', 'b'])
+        ud = self.my_member._resolve_attribute('user_data')
+        self.assertFalse('temp_license:' in ud)
+
+    def test_temp_licenses_single(self):
+        tmpl = copy.deepcopy(grid_member_template)
+        props = tmpl['resources']['my_member']['properties']
+        props['temp_licenses'] = ["vnios"]
+        self.set_stack(tmpl)
+        self.set_member(self.base_member)
+        self.set_token(['a', 'b'])
+        ud = self.my_member._resolve_attribute('user_data')
+        self.assertTrue('temp_license: vnios\n' in ud)
+
+    def test_temp_licenses_multiple(self):
+        tmpl = copy.deepcopy(grid_member_template)
+        props = tmpl['resources']['my_member']['properties']
+        props['temp_licenses'] = ["vnios", "dns"]
+        self.set_stack(tmpl)
+        self.set_member(self.base_member)
+        self.set_token(['a', 'b'])
+        ud = self.my_member._resolve_attribute('user_data')
+        self.assertTrue('temp_license: vnios,dns\n' in ud)
+
+    def test_remote_console_enabled_none(self):
+        self.set_member(self.base_member)
+        self.set_token(['a', 'b'])
+        ud = self.my_member._resolve_attribute('user_data')
+        self.assertFalse('remote_console_enabled:' in ud)
+
+    def test_remote_console_enabled_false(self):
+        tmpl = copy.deepcopy(grid_member_template)
+        props = tmpl['resources']['my_member']['properties']
+        props['remote_console_enabled'] = False
+        self.set_stack(tmpl)
+        self.set_member(self.base_member)
+        self.set_token(['a', 'b'])
+        ud = self.my_member._resolve_attribute('user_data')
+        self.assertTrue('remote_console_enabled: False\n' in ud)
+
+    def test_remote_console_enabled_true(self):
+        tmpl = copy.deepcopy(grid_member_template)
+        props = tmpl['resources']['my_member']['properties']
+        props['remote_console_enabled'] = True
+        self.set_stack(tmpl)
+        self.set_member(self.base_member)
+        self.set_token(['a', 'b'])
+        ud = self.my_member._resolve_attribute('user_data')
+        self.assertTrue('remote_console_enabled: True\n' in ud)
+
+    def test_admin_password_none(self):
+        self.set_member(self.base_member)
+        self.set_token(['a', 'b'])
+        ud = self.my_member._resolve_attribute('user_data')
+        self.assertFalse('default_admin_password:' in ud)
+
+    def test_admin_password_set(self):
+        tmpl = copy.deepcopy(grid_member_template)
+        props = tmpl['resources']['my_member']['properties']
+        props['admin_password'] = 'infoblox'
+        self.set_stack(tmpl)
+        self.set_member(self.base_member)
+        self.set_token(['a', 'b'])
+        ud = self.my_member._resolve_attribute('user_data')
+        self.assertTrue('default_admin_password: infoblox\n' in ud)
+
+    def test_handle_create(self):
+        self.set_member(self.base_member)
+        self.my_member.client = mock.MagicMock()
+        self.my_member.resource_id = None
+        self.my_member.handle_create()
+        self.assertEqual('my-name', self.my_member.resource_id)
+
+    def test_handle_delete_none(self):
+        self.set_member(self.base_member)
+        self.my_member.resource_id = None
+        self.assertIsNone(self.my_member.handle_delete())
+
+    def test_handle_delete(self):
+        self.set_member(self.base_member)
+        self.my_member.resource_id = 'myname'
+        self.my_member.infoblox_object.delete_member.return_value = None
+        self.assertIsNone(self.my_member.handle_delete())
