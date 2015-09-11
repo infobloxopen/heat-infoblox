@@ -41,12 +41,12 @@ resources:
   cpu_alarm_high:
     type: OS::Ceilometer::Alarm
     properties:
-      description: If the avg CPU > 40% for 30 seconds then scale up
+      description: If the avg CPU > 20% for 30 seconds then scale up
       meter_name: cpu_util
       statistic: avg
       period: 30
       evaluation_periods: 1
-      threshold: 40
+      threshold: 20
       alarm_actions:
         - {get_attr: [scaleup_policy, alarm_url]}
       matching_metadata: {'metadata.user_metadata.stack': {get_param: "OS::stack_id"}}
@@ -54,12 +54,12 @@ resources:
   cpu_alarm_low:
     type: OS::Ceilometer::Alarm
     properties:
-      description: If the avg CPU < 15% for 90 seconds then scale down
+      description: If the avg CPU < 5% for 90 seconds then scale down
       meter_name: cpu_util
       statistic: avg
       period: 90
       evaluation_periods: 1
-      threshold: 15
+      threshold: 5
       alarm_actions:
         - {get_attr: [scaledown_policy, alarm_url]}
       matching_metadata: {'metadata.user_metadata.stack': {get_param: "OS::stack_id"}}
