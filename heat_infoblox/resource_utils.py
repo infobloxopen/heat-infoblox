@@ -17,7 +17,9 @@ from heat.common.i18n import _
 from heat.engine import constraints
 from heat.engine import properties
 
+from heat_infoblox import config as cfg
 from heat_infoblox import connector
+from heat_infoblox import ibexceptions as exc
 from heat_infoblox import object_manipulator
 
 """Utilities for specifying resources."""
@@ -35,8 +37,17 @@ def port_schema(port_name, is_required):
     )
 
 
-def connect_to_infoblox(url, username, password, verify, cert):
+def connect_to_infoblox():
+    config = cfg.CONF['infoblox']
+
+    reqd_opts = ['wapi_url', 'username', 'password']
+
+    for opt in reqd_opts:
+        if not getattr(config, opt, None):
+            raise exc.InfobloxIsMisconfigured(option=opt)
+
     return object_manipulator.InfobloxObjectManipulator(
-        connector.Infoblox({"url": url, "username": username,
-                            "password": password, "sslverify": verify,
-                            "certificate": cert}))
+        connector.Infoblox({"url": config.wapi_url,
+                            "username": config.username,
+                            "password": config.password,
+                            "sslverify": config.sslverify}))

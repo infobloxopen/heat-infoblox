@@ -8,10 +8,6 @@ resources:
   grid_member:
     type: Infoblox::Grid::Member
     properties:
-      wapi_url: https://172.16.98.100/wapi/v2.2/
-      wapi_username: admin
-      wapi_password: infoblox
-      wapi_insecure_ignore_invalid_certificate: True
       name: nios-test.infoblox.local
       model: IB-VM-820
       LAN1: 121749db-d096-49f5-a483-1209b55890ef

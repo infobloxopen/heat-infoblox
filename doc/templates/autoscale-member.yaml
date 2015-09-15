@@ -39,10 +39,6 @@ resources:
   grid_member:
     type: Infoblox::Grid::Member
     properties:
-      wapi_url: https://172.16.98.100/wapi/v2.2/
-      wapi_username: admin
-      wapi_password: infoblox
-      wapi_insecure_do_not_verify_certificate: True
       name: { list_join: [ '.', [{ list_join: [ '-', [ 'nios', { get_resource: host_name } ]] }, 'localdomain' ]] }
       model: IB-VM-810
       LAN1: { get_resource: lan1_port }
@@ -57,6 +53,7 @@ resources:
   server:
     type: OS::Nova::Server
     properties:
+      name: { list_join: [ '-', [ 'nios', { get_resource: host_name } ]] }
       flavor: vnios8xx.55
       image: nios-7.2.0-demo-8xx-55.qcow2
       networks: [{network: {get_param: mgmt_network} }, {port: { get_resource: lan1_port}} ]

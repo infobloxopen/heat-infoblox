@@ -37,16 +37,12 @@ class GridMember(resource.Resource):
     '''
 
     PROPERTIES = (
-        WAPI_URL, WAPI_USERNAME, WAPI_PASSWORD,
-        WAPI_NOSSLVERIFY, WAPI_CERTIFICATE,
         NAME, MODEL, LICENSES, TEMP_LICENSES,
         REMOTE_CONSOLE, ADMIN_PASSWORD,
         MGMT_PORT, LAN1_PORT, LAN2_PORT, HA_PORT,
         GM_IP, GM_CERTIFICATE,
         NAT_IP
     ) = (
-        'wapi_url', 'wapi_username', 'wapi_password',
-        'wapi_insecure_do_not_verify_certificate', 'wapi_certificate',
         'name', 'model', 'licenses', 'temp_licenses',
         'remote_console_enabled', 'admin_password',
         'MGMT', 'LAN1', 'LAN2', 'HA',
@@ -101,34 +97,6 @@ class GridMember(resource.Resource):
     support_status = support.SupportStatus(support.UNSUPPORTED)
 
     properties_schema = {
-        WAPI_URL: properties.Schema(
-            properties.Schema.STRING,
-            _('URL to the Infoblox WAPI.'),
-            required=True
-        ),
-        WAPI_CERTIFICATE: properties.Schema(
-            properties.Schema.STRING,
-            _('The certificate for validation of the WAPI URL.'),
-            required=False
-        ),
-        WAPI_NOSSLVERIFY: properties.Schema(
-            properties.Schema.BOOLEAN,
-            _('Do not require the certificate for validating the WAPI URL. '
-              'This is NOT SECURE and should not be used in a production '
-              'environment.'),
-            default=False,
-            required=False
-        ),
-        WAPI_USERNAME: properties.Schema(
-            properties.Schema.STRING,
-            _('Username to login to the WAPI.'),
-            required=True
-        ),
-        WAPI_PASSWORD: properties.Schema(
-            properties.Schema.STRING,
-            _('Password to login to the WAPI.'),
-            required=True
-        ),
         NAME: properties.Schema(
             properties.Schema.STRING,
             _('Member name.'),
@@ -216,12 +184,7 @@ class GridMember(resource.Resource):
 
     def infoblox(self):
         if not getattr(self, 'infoblox_object', None):
-            self.infoblox_object = resource_utils.connect_to_infoblox(
-                self.properties[self.WAPI_URL],
-                self.properties[self.WAPI_USERNAME],
-                self.properties[self.WAPI_PASSWORD],
-                not self.properties[self.WAPI_NOSSLVERIFY],
-                self.properties[self.WAPI_CERTIFICATE])
+            self.infoblox_object = resource_utils.connect_to_infoblox()
         return self.infoblox_object
 
     def handle_create(self):
