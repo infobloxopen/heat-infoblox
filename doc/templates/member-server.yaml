@@ -39,10 +39,11 @@ resources:
       name: { list_join: [ '.', [{ list_join: [ '-', [ 'nios', { get_resource: host_name } ]] }, 'localdomain' ]] }
       model: IB-VM-810
       LAN1: { get_resource: lan1_port }
-      licenses: ["vnios", "dns", "enterprise"]
+      dns: { enable: True }
+      #licenses: ["vnios", "dns", "enterprise"]
 # If you do not have a license pool and want to use temp licenses instead,
 # uncomment the line below
-      #temp_licenses: ["vnios", "dns", "enterprise"]
+      temp_licenses: ["vnios", "dns", "enterprise"]
       gm_ip: 172.16.98.100
       gm_certificate: I agree to bypass the SSL Certification checking, thus using UNSECURE connection to the Grid
       nat_ip: { get_attr: [ floating_ip, floating_ip_address ] }
@@ -58,6 +59,7 @@ resources:
       networks: [{network: {get_param: mgmt_network} }, {port: { get_resource: lan1_port}} ]
       user_data_format: RAW
       user_data: { get_attr: [grid_member, user_data] }
+      metadata: { nios: true }
 outputs:
   member_address:
     value: { get_attr: [lan1_port, fixed_ips] }

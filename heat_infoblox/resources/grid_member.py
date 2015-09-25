@@ -41,19 +41,34 @@ class GridMember(resource.Resource):
         REMOTE_CONSOLE, ADMIN_PASSWORD,
         MGMT_PORT, LAN1_PORT, LAN2_PORT, HA_PORT,
         GM_IP, GM_CERTIFICATE,
-        NAT_IP
+        NAT_IP,
+        #only 'enable' supported for now
+        DNS_SETTINGS, DNS_ENABLE, DNS_RECURSIVE_RESOLVER, DNS_PORTS,
+        DNS_ENABLE_FIXED_RRSET_ORDER_FQDNS, DNS_FIXED_RRSET_ORDER_FQDNS,
+        DNS_USE_FIXED_RRSET_ORDER_FQDNS,
+        DNS_DTC_HEALTH_SOURCE, DNS_DTC_HEALTH_SOURCE_ADDRESS,
+        DNS_RPZ_QNAME_WAIT_RECURSE, DNS_USE_RPZ_QNAME_WAIT_RECURSE,
+        DNS_LOG_DTC_GSLB, DNS_LOG_DTC_HEALTH, DNS_UNBOUND_LOGGING_LEVEL,
     ) = (
         'name', 'model', 'licenses', 'temp_licenses',
         'remote_console_enabled', 'admin_password',
         'MGMT', 'LAN1', 'LAN2', 'HA',
         'gm_ip', 'gm_certificate',
-        'nat_ip'
+        'nat_ip',
+        'dns', 'enable', 'recursive_resolver', 'ports',
+        'enable_fixed_rrset_order_fqdns', 'fixed_rrset_order_fqdns',
+        'use_fixed_rrset_order_fqdns',
+        'dtc_health_source', 'dtc_health_source_address',
+        'rpz_qname_wait_recurse', 'use_rpz_qname_wait_recurse',
+        'log_dtc_glsb', 'log_dtc_health', 'unbound_logging_level',
     )
 
     ATTRIBUTES = (
-        USER_DATA
+        USER_DATA,
+        DNS_UNBOUND_CAPABLE
     ) = (
-        'user_data'
+        'user_data',
+        'is_unbound_capable'
     )
 
     ALLOWED_MODELS = (
@@ -154,6 +169,18 @@ class GridMember(resource.Resource):
         ),
         MGMT_PORT: resource_utils.port_schema(MGMT_PORT, False),
         LAN1_PORT: resource_utils.port_schema(LAN1_PORT, True),
+        DNS_SETTINGS: properties.Schema(
+            properties.Schema.MAP,
+            _('The DNS settings for this member.'),
+            required=False,
+            schema={
+                DNS_ENABLE: properties.Schema(
+                    properties.Schema.BOOLEAN,
+                    _('If true, enable DNS on this member.'),
+                    default=False
+                ),
+            }
+        )
     }
 
     attributes_schema = {
@@ -208,6 +235,13 @@ class GridMember(resource.Resource):
             name,
             hwmodel=self.properties[self.MODEL], hwtype='IB-VNIOS',
             licenses=self.properties[self.LICENSES])
+
+        dns = self.properties[self.DNS_SETTINGS]
+        if dns:
+            self.infoblox().configure_member_dns(
+                name,
+                enable_dns=dns['enable']
+            )
 
         self.resource_id_set(name)
 

@@ -41,6 +41,7 @@ resources:
     properties:
       name: { list_join: [ '.', [{ list_join: [ '-', [ 'nios', { get_resource: host_name } ]] }, 'localdomain' ]] }
       model: IB-VM-810
+      dns: { enable: True }
       LAN1: { get_resource: lan1_port }
       licenses: ["vnios", "dns", "enterprise"]
       temp_licenses: ["vnios", "dns", "enterprise"]
@@ -59,4 +60,4 @@ resources:
       networks: [{network: {get_param: mgmt_network} }, {port: { get_resource: lan1_port}} ]
       user_data_format: RAW
       user_data: { get_attr: [grid_member, user_data] }
-      metadata: {"metering.stack": {get_param: parent_stack_id}}
+      metadata: {"metering.stack": {get_param: parent_stack_id}, 'nios': 'true'}

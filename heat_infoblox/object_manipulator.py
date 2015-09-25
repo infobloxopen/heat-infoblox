@@ -63,6 +63,12 @@ class InfobloxObjectManipulator(object):
         self._update_infoblox_object('member', {'host_name': member_name},
                                      extra_data)
 
+    def configure_member_dns(self, member_name,
+                             enable_dns=False):
+        extra_data = {'enable_dns': enable_dns}
+        self._update_infoblox_object('member:dns', {'host_name': member_name},
+                                     extra_data)
+
     def delete_member(self, member_name):
         member_data = {'host_name': member_name}
         self._delete_infoblox_object('member', member_data)
