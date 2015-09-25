@@ -65,9 +65,11 @@ class GridMember(resource.Resource):
 
     ATTRIBUTES = (
         USER_DATA,
+        NAME_ATTR,
         DNS_UNBOUND_CAPABLE
     ) = (
         'user_data',
+        'name',
         'is_unbound_capable'
     )
 
@@ -186,6 +188,9 @@ class GridMember(resource.Resource):
     attributes_schema = {
         USER_DATA: attributes.Schema(
             _('User data for the Nova boot process.'),
+            type=attributes.Schema.STRING),
+        NAME_ATTR: attributes.Schema(
+            _('The member name.'),
             type=attributes.Schema.STRING)
     }
 
@@ -317,6 +322,8 @@ class GridMember(resource.Resource):
         LOG.debug("MEMBER for %s = %s" % (name, member))
         if name == self.USER_DATA:
             return self._make_user_data(member, token)
+        if name == self.NAME_ATTR:
+            return member['name']
         return None
 
 

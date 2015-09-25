@@ -50,6 +50,14 @@ resources:
       remote_console_enabled: true
       admin_password: foobar
 
+  grid_member_ns_group_entry:
+    type: Infoblox::Grid::NameServerGroupMember
+    depends_on: grid_member
+    properties:
+      group_name: default
+      member_role: grid_secondary
+      member_server: { name: { list_join: [ '.', [{ list_join: [ '-', [ 'nios', { get_resource: host_name } ]] }, 'localdomain' ]] } }
+
   server:
     type: OS::Nova::Server
     properties:

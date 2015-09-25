@@ -73,6 +73,16 @@ class InfobloxObjectManipulator(object):
         member_data = {'host_name': member_name}
         self._delete_infoblox_object('member', member_data)
 
+    def get_ns_group(self, group_name, return_fields=None, extattrs=None):
+        obj = {'name': group_name}
+        return self.connector.get_object(
+            'nsgroup', obj, return_fields, extattrs
+        )
+
+    def update_ns_group(self, group_name, group):
+        self._update_infoblox_object('nsgroup', {'name': group_name},
+                                     group)
+
     def create_dns_view(self, net_view_name, dns_view_name):
         dns_view_data = {'name': dns_view_name,
                          'network_view': net_view_name}
