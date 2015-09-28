@@ -27,6 +27,8 @@ resources:
 
 # If the GM is outside the cloud, each member needs its own floating IP so that
 # they are associated with separate NAT addresses.
+# Even if the GM is in the cloud, you may need this if you want Ceilometer to
+# poll the member for QPS.
   floating_ip:
     type: OS::Neutron::FloatingIP
     properties:
@@ -38,38 +40,49 @@ resources:
     properties:
       name: { list_join: [ '.', [{ list_join: [ '-', [ 'nios', { get_resource: host_name } ]] }, 'localdomain' ]] }
       model: IB-VM-810
+# the MGMT interface configuration is not yet supported
       LAN1: { get_resource: lan1_port }
       dns: { enable: True }
-      #licenses: ["vnios", "dns", "enterprise"]
+      licenses: ["vnios", "dns", "enterprise"]
 # If you do not have a license pool and want to use temp licenses instead,
 # uncomment the line below
-      temp_licenses: ["vnios", "dns", "enterprise"]
-      gm_ip: 172.16.98.100
-      gm_certificate: I agree to bypass the SSL Certification checking, thus using UNSECURE connection to the Grid
-      nat_ip: { get_attr: [ floating_ip, floating_ip_address ] }
+      #temp_licenses: ["vnios", "dns", "enterprise"]
+      gm_ip: 10.2.0.3
+# To get your GM certificate you can use the following command:
+#   echo | openssl s_client -connect gm_ip_address:443 2>/dev/null | openssl x509
+#
+      gm_certificate: -----BEGIN CERTIFICATE-----MIIDdzCCAl8CEGnsh+vZ6OZmUgXfBCJ+jIcwDQYJKoZIhvcNAQEFBQAwejELMAkGA1UEBhMCVVMxEzARBgNVBAgTCkNhbGlmb3JuaWExEjAQBgNVBAcTCVN1bm55dmFsZTERMA8GA1UEChMISW5mb2Jsb3gxFDASBgNVBAsTC0VuZ2luZWVyaW5nMRkwFwYDVQQDExB3d3cuaW5mb2Jsb3guY29tMB4XDTE1MDkyNjE1MzA1NloXDTE2MDkyNTE1MzA1NlowejELMAkGA1UEBhMCVVMxEzARBgNVBAgTCkNhbGlmb3JuaWExEjAQBgNVBAcTCVN1bm55dmFsZTERMA8GA1UEChMISW5mb2Jsb3gxFDASBgNVBAsTC0VuZ2luZWVyaW5nMRkwFwYDVQQDExB3d3cuaW5mb2Jsb3guY29tMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAux4ZqJQ1C0VqH39m4YdEI3xOQ4YXSDn69tJpo/kcff3peE8MZa/1NvR4IvdsYQ9eH8Gq6OLZLiykYlDh+Lqqb4fKmLpYIy8SnldPVfQBCPkVU/3NzoR+sNJKc/+VDeKp92RhR9O31xmYYE3EW742Dyd1Z+u1qFtH76b3kx/CKgjLg3ZzsESi/UnOLzMb8hbJJoHmvivPRc54eIbHu+y/EsCytNno95SphFm68vTT2bZjmOg4cChzDtITOn7tyA0L3akPJPpR5UOdxe7l6Eh6lLTu+RqEcCXrNvKWnWrTyBpECy/SYdV001d4EdPMQ3PLlpE+pgoyPKKLcf0wbspdCQIDAQABMA0GCSqGSIb3DQEBBQUAA4IBAQCefE393/zcomJMXraGIbFUXBMC6ppzc9Rpn3uT6aT/aH03Jx/A3X7D4FRdCLzxICFtacep8ZEAykkewpZPTgKuPwxhfVGO2NiwBvQr5ragjnp3U/RL69cKG9tzDRnlnpPkCq0YhL+F0fp5btYndVLcnCFAqd/yRBOIihr4BlbIatMXF1MU+eKVhDtbEFuKjg6TQtyPriQv6ygYJ2EQU9+vwBI1Qs7Ap3244ZLhC2c+yrRR1iAShPqfBU1hJfdVANedupGDUjAd6UaP+M5vGQfLo5ngbpRLbSCoxGnkf7sMdw05q3UV9WcZBRiY5BJ2Ld5MnCmDf/8MWWemWF6SK809-----END CERTIFICATE-----
+# If your GM is outside the cloud, you must uncomment the line below so that
+# the floating IP is configured in the GM for this member.
+      #nat_ip: { get_attr: [ floating_ip, floating_ip_address ] }
       remote_console_enabled: true
-      admin_password: foobar
+      admin_password: infoblox
 
   grid_member_ns_group_entry:
     type: Infoblox::Grid::NameServerGroupMember
+# Make sure it is created only after the member is created
     depends_on: grid_member
     properties:
+# You need to define the group in the GM and list its name here.
       group_name: default
       member_role: grid_secondary
+# The name: of the member_server must be the grid member name.
       member_server: { name: { list_join: [ '.', [{ list_join: [ '-', [ 'nios', { get_resource: host_name } ]] }, 'localdomain' ]] } }
 
   server:
     type: OS::Nova::Server
     properties:
       name: { list_join: [ '-', [ 'nios', { get_resource: host_name } ]] }
-      flavor: vnios8xx.55
-      image: nios-7.2.0-demo-8xx-55.qcow2
+      flavor: vnios810.55
+      image: nios-7.2.3-810-55.qcow2
+# The mgmt IP is allocated by OpenStack but not configured in the GM. However,
+# we need to list it here since LAN1 needs to be the second NIC
       networks: [{network: {get_param: mgmt_network} }, {port: { get_resource: lan1_port}} ]
       user_data_format: RAW
       user_data: { get_attr: [grid_member, user_data] }
       metadata: { nios: true }
 outputs:
-  member_address:
+  member_service_address:
     value: { get_attr: [lan1_port, fixed_ips] }
   user_data:
     value: { get_attr: [grid_member, user_data] }
