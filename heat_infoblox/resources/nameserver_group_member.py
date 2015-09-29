@@ -56,7 +56,8 @@ class NameServerGroupMember(resource.Resource):
         'name_server_group',
     )
 
-    support_status = support.SupportStatus(support.UNSUPPORTED)
+    support_status = support.SupportStatus(support.UNSUPPORTED,
+        _('See support.infoblox.com for support.'))
 
     properties_schema = {
         GROUP_NAME: properties.Schema(
@@ -95,8 +96,7 @@ class NameServerGroupMember(resource.Resource):
 
     attributes_schema = {
         NS_GROUP: attributes.Schema(
-            _('The name server group details.'),
-            type=attributes.Schema.MAP)
+            _('The name server group details.'))
     }
 
     def infoblox(self):
