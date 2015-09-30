@@ -42,7 +42,7 @@ class GridMember(resource.Resource):
         MGMT_PORT, LAN1_PORT, LAN2_PORT, HA_PORT,
         GM_IP, GM_CERTIFICATE,
         NAT_IP,
-        #only 'enable' supported for now
+        # only 'enable' supported for now
         DNS_SETTINGS, DNS_ENABLE, DNS_RECURSIVE_RESOLVER, DNS_PORTS,
         DNS_ENABLE_FIXED_RRSET_ORDER_FQDNS, DNS_FIXED_RRSET_ORDER_FQDNS,
         DNS_USE_FIXED_RRSET_ORDER_FQDNS,

@@ -1,5 +1,4 @@
-# Copyright (c) 2015 Infoblox Inc.
-# All Rights Reserved.
+# Copyright (c) 2015 Infoblox Inc.  # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -14,10 +13,9 @@
 #    under the License.
 
 import logging
-import netaddr
 
-from heat.common.i18n import _
 from heat.common import exception
+from heat.common.i18n import _
 from heat.engine import attributes
 from heat.engine import constraints
 from heat.engine import properties
@@ -47,7 +45,8 @@ class NameServerGroupMember(resource.Resource):
         'enable_preferred_primaries', 'preferred_primaries'
     )
 
-    # for now, only support grid members - not 'external_primary', 'external_secondary'
+    # for now, only support grid members
+    # not 'external_primary', 'external_secondary'
     MEMBER_ROLES = ['grid_primary', 'grid_secondary']
 
     ATTRIBUTES = (
@@ -81,12 +80,14 @@ class NameServerGroupMember(resource.Resource):
                 ),
                 GRID_REPLICATE: properties.Schema(
                     properties.Schema.BOOLEAN,
-                    _('Determines if grid replication or zone transfer will be used to this server.'),
+                    _('Determines if grid replication or zone transfer will '
+                      'be used to this server.'),
                     default=True
                 ),
                 LEAD: properties.Schema(
                     properties.Schema.BOOLEAN,
-                    _('Determines if this member should serve as the lead secondary for the group.'),
+                    _('Determines if this member should serve as the lead '
+                      'secondary for the group.'),
                     default=False
                 ),
             }
@@ -123,8 +124,8 @@ class NameServerGroupMember(resource.Resource):
             return_fields=['name', 'grid_primary', 'grid_secondaries']
         )
         if len(groups) == 0:
-             raise exception.EntityNotFound(entity='Name Server Group',
-                                            name=group_name)
+            raise exception.EntityNotFound(entity='Name Server Group',
+                                           name=group_name)
         return groups[0]
 
     def handle_create(self):
@@ -142,8 +143,9 @@ class NameServerGroupMember(resource.Resource):
             self._add_member(group['grid_secondaries'], member)
 
         self.infoblox().update_ns_group(group_name, group)
-        self.resource_id_set("%s/%s/%s"
-            % (group_name, member_role, member['name']))
+        self.resource_id_set(
+            "%s/%s/%s" % (group_name, member_role, member['name'])
+        )
 
     def handle_delete(self):
         if self.resource_id is None:
@@ -154,7 +156,7 @@ class NameServerGroupMember(resource.Resource):
         field_name = 'grid_primary'
         if member_role == 'grid_secondary':
             field_name = 'grid_secondaries'
-       
+
         group = self._get_ns_group(group_name)
 
         self._remove_member(group[field_name], member)
