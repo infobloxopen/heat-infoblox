@@ -56,6 +56,7 @@ class Infoblox(object):
 
         self.session = requests.Session()
         adapter = requests.adapters.HTTPAdapter(
+            max_retries=5,
             pool_connections=self.http_pool_connections,
             pool_maxsize=self.http_pool_maxsize)
         self.session.mount('http://', adapter)

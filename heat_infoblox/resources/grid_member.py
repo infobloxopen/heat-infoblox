@@ -111,7 +111,8 @@ class GridMember(resource.Resource):
         'vnios',
         'reporting')
 
-    support_status = support.SupportStatus(support.UNSUPPORTED)
+    support_status = support.SupportStatus(support.UNSUPPORTED,
+        _('See support.infoblox.com for support.'))
 
     properties_schema = {
         NAME: properties.Schema(
@@ -187,11 +188,9 @@ class GridMember(resource.Resource):
 
     attributes_schema = {
         USER_DATA: attributes.Schema(
-            _('User data for the Nova boot process.'),
-            type=attributes.Schema.STRING),
+            _('User data for the Nova boot process.')),
         NAME_ATTR: attributes.Schema(
-            _('The member name.'),
-            type=attributes.Schema.STRING)
+            _('The member name.'))
     }
 
     def _make_network_settings(self, ip):
