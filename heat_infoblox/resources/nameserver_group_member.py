@@ -126,8 +126,10 @@ class NameServerGroupMember(resource.Resource):
             return_fields=['name', 'grid_primary', 'grid_secondaries']
         )
         if len(groups) == 0:
-            raise exception.EntityNotFound(entity='Name Server Group',
-                                           name=group_name)
+            raise exception.NotFound(
+                'Name Server Group %s not found' % group_name
+            )
+
         return groups[0]
 
     def handle_create(self):

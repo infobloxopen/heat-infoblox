@@ -9,8 +9,9 @@ fi
 
 openstack project create $TENANT_NAME
 openstack user create nios --project $TENANT_NAME --password infoblox
-openstack role add --user nios --project $TENANT_NAME Member
 openstack role add --user admin --project $TENANT_NAME Member
+openstack role add --user nios --project $TENANT_NAME Member
+openstack role add --user nios --project $TENANT_NAME heat_stack_owner
 
 nova flavor-create --is-public true vnios810.55 auto 2048 55 2 --swap 0 --ephemeral 0
 nova flavor-create --is-public true vnios820.160 auto 3584 160 2 --swap 0 --ephemeral 0
