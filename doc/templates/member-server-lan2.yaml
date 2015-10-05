@@ -7,6 +7,12 @@ parameters:
   lan1_network:
     type: string
     description: the network for LAN1
+  lan2_network:
+    type: string
+    description: the network for LAN2
+  ha_network:
+    type: string
+    description: the network for the H/A port
   external_network:
     type: string
     description: the external network for floating IP allocations
@@ -27,11 +33,16 @@ resources:
 
 # For MGMT, we do not configure via injection, but we do configure via WAPI
 # at the time of member creation, so we want to pre-allocate that port too
-
   mgmt_port:
     type: OS::Neutron::Port
     properties:
       network: { get_param: mgmt_network }
+
+# Same goes for LAN2
+  lan2_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_param: lan2_network }
 
 # If the GM is outside the cloud, each member needs its own floating IP so that
 # they are associated with separate NAT addresses.
@@ -59,6 +70,7 @@ resources:
       model: IB-VM-810
       MGMT: { get_resource: mgmt_port }
       LAN1: { get_resource: lan1_port }
+      LAN2: { get_resource: lan2_port }
       dns: { enable: True }
       licenses: ["vnios", "dns", "enterprise"]
 # If you do not have a license pool and want to use temp licenses instead,
@@ -92,9 +104,9 @@ resources:
       name: { list_join: [ '-', [ 'nios', { get_resource: host_name } ]] }
       flavor: vnios810.55
       image: nios-7.2.3-810-55.qcow2
-# The mgmt IP is allocated by OpenStack but not configured in the GM. However,
-# we need to list it here since LAN1 needs to be the second NIC
-      networks: [{port: {get_resource: mgmt_port} }, {port: { get_resource: lan1_port}} ]
+# We need to list the H/A port here because it is eth2 and lan2 is eth3
+# I am sticking the H/A port on the same network as LAN2, but normally you wouldn't
+      networks: [{port: {get_resource: mgmt_port} }, {port: { get_resource: lan1_port}}, { network: { get_param: ha_network } }, {port: { get_resource: lan2_port }}]
       user_data_format: RAW
       user_data: { get_attr: [grid_member, user_data] }
       metadata: { nios: true }
