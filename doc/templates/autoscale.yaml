@@ -37,7 +37,7 @@ resources:
     properties:
       adjustment_type: change_in_capacity
       auto_scaling_group_id: {get_resource: nios_member_group}
-      cooldown: 120
+      cooldown: 900
       scaling_adjustment: 1
   scaledown_policy:
     type: OS::Heat::ScalingPolicy
@@ -46,31 +46,31 @@ resources:
       auto_scaling_group_id: {get_resource: nios_member_group}
       cooldown: 600
       scaling_adjustment: -1
-  cpu_alarm_high:
+  qps_alarm_high:
     type: OS::Ceilometer::Alarm
     properties:
-      description: If the avg CPU > 30% for 120 seconds then scale up
-      meter_name: cpu_util
+      description: If the avg QPS > 100 for 120 seconds then scale up
+      meter_name: nios.dns.qps
       statistic: avg
       period: 120
       evaluation_periods: 1
-      threshold: 30
+      threshold: 100
       alarm_actions:
         - {get_attr: [scaleup_policy, alarm_url]}
-      matching_metadata: {'metadata.user_metadata.stack': {get_param: "OS::stack_id"}}
+      #matching_metadata: {'metadata.metering.stack': {get_param: "OS::stack_id"}}
       comparison_operator: gt
-  cpu_alarm_low:
+  qps_alarm_low:
     type: OS::Ceilometer::Alarm
     properties:
-      description: If the avg CPU < 5% for 120 seconds then scale down
-      meter_name: cpu_util
+      description: If the avg QPS < 10 for 120 seconds then scale down
+      meter_name: nios.dns.qps
       statistic: avg
       period: 120
       evaluation_periods: 1
-      threshold: 5
+      threshold: 10
       alarm_actions:
         - {get_attr: [scaledown_policy, alarm_url]}
-      matching_metadata: {'metadata.user_metadata.stack': {get_param: "OS::stack_id"}}
+      #matching_metadata: {'metadata.metering.stack': {get_param: "OS::stack_id"}}
       comparison_operator: lt
 
 outputs:
