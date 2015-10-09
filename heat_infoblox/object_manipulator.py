@@ -37,18 +37,32 @@ class InfobloxObjectManipulator(object):
         )
 
     def create_member(self, name=None, platform='VNIOS',
-                      ipv4=None, ipv6=None, nat_ip=None):
+                      mgmt=None, lan1={}, lan2=None,
+                      nat_ip=None):
         member_data = {'host_name': name, 'platform': platform}
         extra_data = {}
-        if ipv4:
-            extra_data['vip_setting'] = ipv4
-        if ipv6:
-            extra_data['ipv6_setting'] = ipv6
+
+        if lan1.get('ipv4', None):
+            extra_data['vip_setting'] = lan1['ipv4']
+        if lan1.get('ipv6', None):
+            extra_data['ipv6_setting'] = lan1['ipv6']
         if nat_ip:
             extra_data['nat_setting'] = {
                 'enabled': True,
                 'external_virtual_ip': nat_ip
             }
+
+        if mgmt and mgmt.get('ipv4', None):
+            extra_data['node_info'] = [{"mgmt_network_setting": mgmt['ipv4']}]
+            extra_data['mgmt_port_setting'] = { "enabled": True }
+
+        if lan2 and lan2.get('ipv4', None):
+            extra_data['lan2_enabled'] = True
+            extra_data['lan2_port_setting'] = {
+                'enabled': True,
+                'network_setting': lan2['ipv4']
+            }
+
         return self._create_infoblox_object('member', member_data, extra_data)
 
     def pre_provision_member(self, member_name,

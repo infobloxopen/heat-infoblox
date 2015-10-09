@@ -173,6 +173,7 @@ class GridMember(resource.Resource):
         ),
         MGMT_PORT: resource_utils.port_schema(MGMT_PORT, False),
         LAN1_PORT: resource_utils.port_schema(LAN1_PORT, True),
+        LAN2_PORT: resource_utils.port_schema(LAN2_PORT, False),
         DNS_SETTINGS: properties.Schema(
             properties.Schema.MAP,
             _('The DNS settings for this member.'),
@@ -219,9 +220,16 @@ class GridMember(resource.Resource):
             self.infoblox_object = resource_utils.connect_to_infoblox()
         return self.infoblox_object
 
-    def handle_create(self):
+    def _make_port_network_settings(self, port_name):
+        if self.properties[port_name] is None:
+            return None
+
         port = self.client('neutron').show_port(
-            self.properties[self.LAN1_PORT])['port']
+            self.properties[port_name])['port']
+
+        if port is None:
+            return None
+
         ipv4 = None
         ipv6 = None
         for ip in port['fixed_ips']:
@@ -230,12 +238,18 @@ class GridMember(resource.Resource):
             else:
                 if ipv4 is None:
                     ipv4 = self._make_network_settings(ip)
+        return {'ipv4': ipv4, 'ipv6': ipv6}
+
+    def handle_create(self):
+        mgmt = self._make_port_network_settings(self.MGMT_PORT)
+        lan1 = self._make_port_network_settings(self.LAN1_PORT)
+        lan2 = self._make_port_network_settings(self.LAN2_PORT)
 
         name = self.properties[self.NAME]
         nat = self.properties[self.NAT_IP]
 
-        self.infoblox().create_member(name=name, ipv4=ipv4,
-                                      ipv6=ipv6, nat_ip=nat)
+        self.infoblox().create_member(name=name, mgmt=mgmt, lan1=lan1,
+                                      lan2=lan2, nat_ip=nat)
         self.infoblox().pre_provision_member(
             name,
             hwmodel=self.properties[self.MODEL], hwtype='IB-VNIOS',
