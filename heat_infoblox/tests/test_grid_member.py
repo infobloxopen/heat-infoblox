@@ -98,6 +98,42 @@ class GridMemberTest(common.HeatTestCase):
             {'token': t[1]}
         ]
 
+    def set_interface(self, interface, tmpl=None):
+        if tmpl is None:
+            tmpl = copy.deepcopy(grid_member_template)
+        props = tmpl['resources']['my_member']['properties']
+        props[interface] = interface
+        self.set_stack(tmpl)
+        self.my_member.client = mock.MagicMock()
+        self.my_member.infoblox_object.create_member = mock.MagicMock()
+        return tmpl
+
+    def _empty_ifc(self):
+        return {'ipv4': None, 'ipv6': None}
+
+    def test_mgmt(self):
+        self.set_interface('MGMT')
+        self.my_member.handle_create()
+        cm = self.my_member.infoblox_object.create_member
+        cm.assert_called_with(name='my-name', mgmt=self._empty_ifc(),
+                              lan1=self._empty_ifc(), lan2=None, nat_ip=None)
+
+    def test_lan2(self):
+        self.set_interface('LAN2')
+        self.my_member.handle_create()
+        cm = self.my_member.infoblox_object.create_member
+        cm.assert_called_with(name='my-name', lan2=self._empty_ifc(),
+                              lan1=self._empty_ifc(), mgmt=None, nat_ip=None)
+
+    def test_mgmt_lan2(self):
+        tmpl = self.set_interface('MGMT')
+        self.set_interface('LAN2', tmpl=tmpl)
+        self.my_member.handle_create()
+        cm = self.my_member.infoblox_object.create_member
+        cm.assert_called_with(name='my-name', mgmt=self._empty_ifc(),
+                              lan1=self._empty_ifc(), lan2=self._empty_ifc(),
+                              nat_ip=None)
+
     def test_resource_mapping(self):
         mapping = grid_member.resource_mapping()
         self.assertEqual(1, len(mapping))

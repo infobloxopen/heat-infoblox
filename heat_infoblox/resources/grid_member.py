@@ -331,13 +331,13 @@ class GridMember(resource.Resource):
         member_name = self.properties[self.NAME]
         member = self.infoblox().get_member(
             member_name,
-            return_fields=['vip_setting', 'ipv6_setting'])[0]
+            return_fields=['host_name', 'vip_setting', 'ipv6_setting'])[0]
         token = self._get_member_tokens(member)
         LOG.debug("MEMBER for %s = %s" % (name, member))
         if name == self.USER_DATA:
             return self._make_user_data(member, token)
         if name == self.NAME_ATTR:
-            return member['name']
+            return member['host_name']
         return None
 
 

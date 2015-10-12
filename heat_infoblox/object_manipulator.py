@@ -54,7 +54,7 @@ class InfobloxObjectManipulator(object):
 
         if mgmt and mgmt.get('ipv4', None):
             extra_data['node_info'] = [{"mgmt_network_setting": mgmt['ipv4']}]
-            extra_data['mgmt_port_setting'] = { "enabled": True }
+            extra_data['mgmt_port_setting'] = {"enabled": True}
 
         if lan2 and lan2.get('ipv4', None):
             extra_data['lan2_enabled'] = True

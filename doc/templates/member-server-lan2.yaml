@@ -89,14 +89,12 @@ resources:
 
   grid_member_ns_group_entry:
     type: Infoblox::Grid::NameServerGroupMember
-# Make sure it is created only after the member is created
-    depends_on: grid_member
     properties:
 # You need to define the group in the GM and list its name here.
       group_name: default
       member_role: grid_secondary
 # The name: of the member_server must be the grid member name.
-      member_server: { name: { list_join: [ '.', [{ list_join: [ '-', [ 'nios', { get_resource: host_name } ]] }, 'localdomain' ]] } }
+      member_server: { name: { get_attr: [grid_member, name] } }
 
   server:
     type: OS::Nova::Server
