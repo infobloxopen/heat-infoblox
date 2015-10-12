@@ -134,6 +134,31 @@ class GridMemberTest(common.HeatTestCase):
                               lan1=self._empty_ifc(), lan2=self._empty_ifc(),
                               nat_ip=None)
 
+    def set_dns(self, dns, tmpl=None):
+        if tmpl is None:
+            tmpl = copy.deepcopy(grid_member_template)
+        props = tmpl['resources']['my_member']['properties']
+        props['dns'] = dns
+        self.set_stack(tmpl)
+        self.my_member.client = mock.MagicMock()
+        self.my_member.infoblox_object.create_member = mock.MagicMock()
+        self.my_member.infoblox_object.pre_provision_member = mock.MagicMock()
+        return tmpl
+
+    def test_dns_settings_enabled(self):
+        dns = {'enable': True}
+        self.set_dns(dns)
+        self.my_member.handle_create()
+        config_dns = self.my_member.infoblox_object.configure_member_dns
+        config_dns.assert_called_with('my-name', enable_dns=True)
+
+    def test_dns_settings_disabled(self):
+        dns = {'enable': False}
+        self.set_dns(dns)
+        self.my_member.handle_create()
+        config_dns = self.my_member.infoblox_object.configure_member_dns
+        config_dns.assert_called_with('my-name', enable_dns=False)
+
     def test_resource_mapping(self):
         mapping = grid_member.resource_mapping()
         self.assertEqual(1, len(mapping))
