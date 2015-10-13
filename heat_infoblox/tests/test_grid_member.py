@@ -301,3 +301,52 @@ class GridMemberTest(common.HeatTestCase):
         self.my_member.resource_id = 'myname'
         self.my_member.infoblox_object.delete_member.return_value = None
         self.assertIsNone(self.my_member.handle_delete())
+
+    def set_net_info(self, port, subnet):
+        attrs = {'show_port.return_value': port,
+                 'show_subnet.return_value': subnet}
+        self.my_member.client = mock.Mock()
+        self.my_member.client.return_value = mock.Mock(**attrs)
+
+    def _make_port_subnet(self, ip, gw, cidr, v6mode=None):
+        port = {
+            'port': {
+                'fixed_ips': [
+                    {'ip_address': ip, 'subnet_id': 'junk'},
+                ]
+            }
+        }
+        subnet = {'subnet': {'cidr': cidr, 'gateway_ip': gw}}
+        if v6mode is not None:
+            subnet['subnet']['ipv6_ra_mode'] = v6mode
+
+        return port, subnet
+
+    def test_make_network_settings_ipv4(self):
+        port, subnet = self._make_port_subnet('1.2.3.4', '1.2.3.10',
+                                              '1.2.3.0/25')
+        self.set_net_info(port, subnet)
+        settings = self.my_member._make_port_network_settings('LAN1')
+        expected = {'ipv4': {'address': '1.2.3.4', 'gateway': '1.2.3.10',
+                    'subnet_mask': '255.255.255.128'}, 'ipv6': None}
+        self.assertEqual(expected, settings)
+
+    def test_make_network_settings_ipv6_slaac(self):
+        port, subnet = self._make_port_subnet('1::4', '1::10',
+                                              '1::0/64', 'slaac')
+        self.set_net_info(port, subnet)
+        settings = self.my_member._make_port_network_settings('LAN1')
+        ipv6 = {'auto_router_config_enabled': True, 'cidr_prefix': 64,
+                'enabled': True, 'gateway': '1::10', 'virtual_ip': '1::4'}
+        expected = {'ipv4': None, 'ipv6': ipv6}
+        self.assertEqual(expected, settings)
+
+    def test_make_network_settings_ipv6_stateful(self):
+        port, subnet = self._make_port_subnet('1::4', '1::10',
+                                              '1::0/64', 'stateful')
+        self.set_net_info(port, subnet)
+        settings = self.my_member._make_port_network_settings('LAN1')
+        ipv6 = {'auto_router_config_enabled': False, 'cidr_prefix': 64,
+                'enabled': True, 'gateway': '1::10', 'virtual_ip': '1::4'}
+        expected = {'ipv4': None, 'ipv6': ipv6}
+        self.assertEqual(expected, settings)
