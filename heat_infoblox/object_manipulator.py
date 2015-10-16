@@ -87,6 +87,12 @@ class InfobloxObjectManipulator(object):
         member_data = {'host_name': member_name}
         self._delete_infoblox_object('member', member_data)
 
+    def get_all_ns_groups(self, return_fields=None, extattrs=None):
+        obj = {}
+        return self.connector.get_object(
+            'nsgroup', obj, return_fields, extattrs
+        )
+
     def get_ns_group(self, group_name, return_fields=None, extattrs=None):
         obj = {'name': group_name}
         return self.connector.get_object(

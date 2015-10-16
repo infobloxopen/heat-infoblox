@@ -130,7 +130,7 @@ class Infoblox(object):
                              verify=self.sslverify,
                              headers=headers)
 
-        LOG.debug("RESPONSE = %s" % r)
+        LOG.debug("RESPONSE[%s] = %s" % (r.status_code, r.content))
 
         if r.status_code != requests.codes.ok:
             raise exc.InfobloxSearchError(

@@ -264,8 +264,27 @@ class GridMember(resource.Resource):
 
         self.resource_id_set(name)
 
+    def _remove_from_all_ns_groups(self):
+        # This is a workaround needed because Juno Heat does not honor
+        # dependencies in nested autoscale group stacks.
+        fields = {'name', 'grid_primary', 'grid_secondaries'}
+        groups = self.infoblox().get_all_ns_groups(return_fields=fields)
+        for group in groups:
+            new_list = {}
+            changed = False
+            for field in ('grid_primary', 'grid_secondaries'):
+                new_list[field] = []
+                for member in group[field]:
+                    if member['name'] != self.resource_id:
+                        new_list[field].append(member)
+                    else:
+                        changed = True
+            if changed:
+                self.infoblox().update_ns_group(group['name'], new_list)
+
     def handle_delete(self):
         if self.resource_id is not None:
+            self._remove_from_all_ns_groups()
             self.infoblox().delete_member(self.resource_id)
 
     def _make_user_data(self, member, token):
@@ -328,7 +347,7 @@ class GridMember(resource.Resource):
         return token
 
     def _resolve_attribute(self, name):
-        member_name = self.properties[self.NAME]
+        member_name = self.resource_id
         member = self.infoblox().get_member(
             member_name,
             return_fields=['host_name', 'vip_setting', 'ipv6_setting'])[0]

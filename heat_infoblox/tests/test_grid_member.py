@@ -350,3 +350,27 @@ class GridMemberTest(common.HeatTestCase):
                 'enabled': True, 'gateway': '1::10', 'virtual_ip': '1::4'}
         expected = {'ipv4': None, 'ipv6': ipv6}
         self.assertEqual(expected, settings)
+
+    def test_remove_from_all_ns_groups(self):
+        groups = [
+            {
+                'name': 'my-group',
+                'grid_primary': [{'name': 'foo-bar'}],
+                'grid_secondaries': [{'name': 'my-name'}]
+            },
+            {
+                'name': 'other-group',
+                'grid_primary': [{'name': 'foo-bar'}],
+                'grid_secondaries': [{'name': 'bar-foo'}]
+            }
+        ]
+        ibobj = self.my_member.infoblox_object
+        ibobj.get_all_ns_groups.return_value = groups
+        self.my_member._remove_from_all_ns_groups()
+        ibobj.update_ns_group.assert_called_once_with(
+            'my-group',
+            {
+                'grid_primary': [{'name': 'foo-bar'}],
+                'grid_secondaries': []
+            }
+        )
