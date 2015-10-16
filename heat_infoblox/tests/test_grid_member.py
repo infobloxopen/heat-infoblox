@@ -366,6 +366,7 @@ class GridMemberTest(common.HeatTestCase):
         ]
         ibobj = self.my_member.infoblox_object
         ibobj.get_all_ns_groups.return_value = groups
+        self.my_member.resource_id = 'my-name'
         self.my_member._remove_from_all_ns_groups()
         ibobj.update_ns_group.assert_called_once_with(
             'my-group',
