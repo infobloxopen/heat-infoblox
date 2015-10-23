@@ -57,7 +57,7 @@ resources:
       threshold: 100
       alarm_actions:
         - {get_attr: [scaleup_policy, alarm_url]}
-      #matching_metadata: {'metadata.metering.stack': {get_param: "OS::stack_id"}}
+      matching_metadata: {'metadata.metering.stack': {get_param: "OS::stack_id"}}
       comparison_operator: gt
   qps_alarm_low:
     type: OS::Ceilometer::Alarm
