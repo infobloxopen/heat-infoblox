@@ -22,13 +22,19 @@ glance image-create --name nios-7.2.3-820-160.qcow2 --visibility public --contai
 TENANT_ID=$(openstack project show $TENANT_NAME -f value -c id)
 neutron net-create --tenant-id $TENANT_ID management-net
 neutron net-create --tenant-id $TENANT_ID service-net
+neutron net-create --tenant-id $TENANT_ID service-2-net
+neutron net-create --tenant-id $TENANT_ID ha-net
 
 neutron subnet-create --name management management-net --tenant-id $TENANT_ID 10.1.0.0/24
 neutron subnet-create --name service service-net --tenant-id $TENANT_ID 10.2.0.0/24
+neutron subnet-create --name service-2 service-2-net --tenant-id $TENANT_ID 10.3.0.0/24
+neutron subnet-create --name ha ha-net --tenant-id $TENANT_ID 10.4.0.0/24
 
 neutron router-create router --tenant-id $TENANT_ID
 neutron router-gateway-set router public
 neutron router-interface-add router service
+neutron router-interface-add router management
+neutron router-interface-add router service-2
 
 SEC_GROUPS=$(neutron security-group-list -f value -c id -c name | cut -f 1 -d ' ')
 for id in $SEC_GROUPS

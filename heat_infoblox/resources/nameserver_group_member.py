@@ -55,7 +55,9 @@ class NameServerGroupMember(resource.Resource):
         'name_server_group',
     )
 
-    support_status = support.SupportStatus(support.UNSUPPORTED)
+    support_status = support.SupportStatus(
+        support.UNSUPPORTED,
+        _('See support.infoblox.com for support.'))
 
     properties_schema = {
         GROUP_NAME: properties.Schema(
@@ -148,6 +150,7 @@ class NameServerGroupMember(resource.Resource):
         )
 
     def handle_delete(self):
+        LOG.debug("NSGROUP %s DELETE" % self.resource_id)
         if self.resource_id is None:
             return None
 
@@ -159,7 +162,9 @@ class NameServerGroupMember(resource.Resource):
 
         group = self._get_ns_group(group_name)
 
+        LOG.debug("NSGROUP for DELETE: %s" % group)
         self._remove_member(group[field_name], member)
+        LOG.debug("NSGROUP update DELETE: %s" % group)
         self.infoblox().update_ns_group(group_name, group)
 
     def _resolve_attribute(self, name):

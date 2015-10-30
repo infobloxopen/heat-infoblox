@@ -98,6 +98,67 @@ class GridMemberTest(common.HeatTestCase):
             {'token': t[1]}
         ]
 
+    def set_interface(self, interface, tmpl=None):
+        if tmpl is None:
+            tmpl = copy.deepcopy(grid_member_template)
+        props = tmpl['resources']['my_member']['properties']
+        props[interface] = interface
+        self.set_stack(tmpl)
+        self.my_member.client = mock.MagicMock()
+        self.my_member.infoblox_object.create_member = mock.MagicMock()
+        return tmpl
+
+    def _empty_ifc(self):
+        return {'ipv4': None, 'ipv6': None}
+
+    def test_mgmt(self):
+        self.set_interface('MGMT')
+        self.my_member.handle_create()
+        cm = self.my_member.infoblox_object.create_member
+        cm.assert_called_with(name='my-name', mgmt=self._empty_ifc(),
+                              lan1=self._empty_ifc(), lan2=None, nat_ip=None)
+
+    def test_lan2(self):
+        self.set_interface('LAN2')
+        self.my_member.handle_create()
+        cm = self.my_member.infoblox_object.create_member
+        cm.assert_called_with(name='my-name', lan2=self._empty_ifc(),
+                              lan1=self._empty_ifc(), mgmt=None, nat_ip=None)
+
+    def test_mgmt_lan2(self):
+        tmpl = self.set_interface('MGMT')
+        self.set_interface('LAN2', tmpl=tmpl)
+        self.my_member.handle_create()
+        cm = self.my_member.infoblox_object.create_member
+        cm.assert_called_with(name='my-name', mgmt=self._empty_ifc(),
+                              lan1=self._empty_ifc(), lan2=self._empty_ifc(),
+                              nat_ip=None)
+
+    def set_dns(self, dns, tmpl=None):
+        if tmpl is None:
+            tmpl = copy.deepcopy(grid_member_template)
+        props = tmpl['resources']['my_member']['properties']
+        props['dns'] = dns
+        self.set_stack(tmpl)
+        self.my_member.client = mock.MagicMock()
+        self.my_member.infoblox_object.create_member = mock.MagicMock()
+        self.my_member.infoblox_object.pre_provision_member = mock.MagicMock()
+        return tmpl
+
+    def test_dns_settings_enabled(self):
+        dns = {'enable': True}
+        self.set_dns(dns)
+        self.my_member.handle_create()
+        config_dns = self.my_member.infoblox_object.configure_member_dns
+        config_dns.assert_called_with('my-name', enable_dns=True)
+
+    def test_dns_settings_disabled(self):
+        dns = {'enable': False}
+        self.set_dns(dns)
+        self.my_member.handle_create()
+        config_dns = self.my_member.infoblox_object.configure_member_dns
+        config_dns.assert_called_with('my-name', enable_dns=False)
+
     def test_resource_mapping(self):
         mapping = grid_member.resource_mapping()
         self.assertEqual(1, len(mapping))
@@ -240,3 +301,77 @@ class GridMemberTest(common.HeatTestCase):
         self.my_member.resource_id = 'myname'
         self.my_member.infoblox_object.delete_member.return_value = None
         self.assertIsNone(self.my_member.handle_delete())
+
+    def set_net_info(self, port, subnet):
+        attrs = {'show_port.return_value': port,
+                 'show_subnet.return_value': subnet}
+        self.my_member.client = mock.Mock()
+        self.my_member.client.return_value = mock.Mock(**attrs)
+
+    def _make_port_subnet(self, ip, gw, cidr, v6mode=None):
+        port = {
+            'port': {
+                'fixed_ips': [
+                    {'ip_address': ip, 'subnet_id': 'junk'},
+                ]
+            }
+        }
+        subnet = {'subnet': {'cidr': cidr, 'gateway_ip': gw}}
+        if v6mode is not None:
+            subnet['subnet']['ipv6_ra_mode'] = v6mode
+
+        return port, subnet
+
+    def test_make_network_settings_ipv4(self):
+        port, subnet = self._make_port_subnet('1.2.3.4', '1.2.3.10',
+                                              '1.2.3.0/25')
+        self.set_net_info(port, subnet)
+        settings = self.my_member._make_port_network_settings('LAN1')
+        expected = {'ipv4': {'address': '1.2.3.4', 'gateway': '1.2.3.10',
+                    'subnet_mask': '255.255.255.128'}, 'ipv6': None}
+        self.assertEqual(expected, settings)
+
+    def test_make_network_settings_ipv6_slaac(self):
+        port, subnet = self._make_port_subnet('1::4', '1::10',
+                                              '1::0/64', 'slaac')
+        self.set_net_info(port, subnet)
+        settings = self.my_member._make_port_network_settings('LAN1')
+        ipv6 = {'auto_router_config_enabled': True, 'cidr_prefix': 64,
+                'enabled': True, 'gateway': '1::10', 'virtual_ip': '1::4'}
+        expected = {'ipv4': None, 'ipv6': ipv6}
+        self.assertEqual(expected, settings)
+
+    def test_make_network_settings_ipv6_stateful(self):
+        port, subnet = self._make_port_subnet('1::4', '1::10',
+                                              '1::0/64', 'stateful')
+        self.set_net_info(port, subnet)
+        settings = self.my_member._make_port_network_settings('LAN1')
+        ipv6 = {'auto_router_config_enabled': False, 'cidr_prefix': 64,
+                'enabled': True, 'gateway': '1::10', 'virtual_ip': '1::4'}
+        expected = {'ipv4': None, 'ipv6': ipv6}
+        self.assertEqual(expected, settings)
+
+    def test_remove_from_all_ns_groups(self):
+        groups = [
+            {
+                'name': 'my-group',
+                'grid_primary': [{'name': 'foo-bar'}],
+                'grid_secondaries': [{'name': 'my-name'}]
+            },
+            {
+                'name': 'other-group',
+                'grid_primary': [{'name': 'foo-bar'}],
+                'grid_secondaries': [{'name': 'bar-foo'}]
+            }
+        ]
+        ibobj = self.my_member.infoblox_object
+        ibobj.get_all_ns_groups.return_value = groups
+        self.my_member.resource_id = 'my-name'
+        self.my_member._remove_from_all_ns_groups()
+        ibobj.update_ns_group.assert_called_once_with(
+            'my-group',
+            {
+                'grid_primary': [{'name': 'foo-bar'}],
+                'grid_secondaries': []
+            }
+        )
