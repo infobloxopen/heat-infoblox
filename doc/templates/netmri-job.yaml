@@ -1,0 +1,27 @@
+heat_template_version: 2014-10-16
+description: An Infoblox NetMRI Job
+parameters:
+#  device_id:
+#    type: string
+#    description: the NetMRI DeviceID
+  device_ip:
+    type: string
+  network_view:
+    type: string
+  command:
+    type: string
+    description: the command to run
+    default: "show ver"
+resources:
+  netmri_job:
+    type: Infoblox::NetMRI::Job
+    properties:
+      connection: { url: "https://netmri/api/3", username: admin, password: password, sslverify: False }
+      source: { script: "Ad Hoc Command Batch" }
+      #targets: [ { device_id: { get_param: device_id } } ]
+      targets: [ { device_ip_address: { get_param: device_ip }, network_view: { get_param: network_view } } ]
+      inputs: { commands_to_be_executed: { get_param: command } }
+      wait: True
+outputs:
+  job_id:
+    value: { get_attr: [netmri_job, id] }
