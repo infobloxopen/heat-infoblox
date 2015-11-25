@@ -28,8 +28,7 @@ resources:
     properties:
       network: { get_param: lan1_network }
 
-# If the GM is outside the cloud, each member needs its own floating IP so that
-# they are associated with separate NAT addresses.
+# Each member needs a floating IP so Ceilometer can poll the member for QPS.
   floating_ip:
     type: OS::Neutron::FloatingIP
     properties:
@@ -41,23 +40,47 @@ resources:
     properties:
       name: { list_join: [ '.', [{ list_join: [ '-', [ 'nios', { get_resource: host_name } ]] }, 'localdomain' ]] }
       model: IB-VM-810
-      dns: { enable: True }
+# the MGMT interface configuration is not yet supported
       LAN1: { get_resource: lan1_port }
+      dns: { enable: True }
       licenses: ["vnios", "dns", "enterprise"]
-      temp_licenses: ["vnios", "dns", "enterprise"]
-      gm_ip: 172.16.98.100
-      gm_certificate: I agree to bypass the SSL Certification checking, thus using UNSECURE connection to the Grid
-      nat_ip: { get_attr: [ floating_ip, floating_ip_address ] }
+# If you do not have a license pool and want to use temp licenses instead,
+# uncomment the line below
+      #temp_licenses: ["vnios", "dns", "enterprise"]
+      gm_ip: 10.1.0.2
+# To get your GM certificate you can use the following command:
+#   echo | openssl s_client -connect gm_ip_address:443 2>/dev/null | openssl x509
+#
+      gm_certificate: -----BEGIN CERTIFICATE-----MIIDdzCCAl8CEEZ4MABmScxA8/It6d9u5dcwDQYJKoZIhvcNAQEFBQAwejELMAkGA1UEBhMCVVMxEzARBgNVBAgTCkNhbGlmb3JuaWExEjAQBgNVBAcTCVN1bm55dmFsZTERMA8GA1UEChMISW5mb2Jsb3gxFDASBgNVBAsTC0VuZ2luZWVyaW5nMRkwFwYDVQQDExB3d3cuaW5mb2Jsb3guY29tMB4XDTE1MTAwODE1MzIxMloXDTE2MTAwNzE1MzIxMlowejELMAkGA1UEBhMCVVMxEzARBgNVBAgTCkNhbGlmb3JuaWExEjAQBgNVBAcTCVN1bm55dmFsZTERMA8GA1UEChMISW5mb2Jsb3gxFDASBgNVBAsTC0VuZ2luZWVyaW5nMRkwFwYDVQQDExB3d3cuaW5mb2Jsb3guY29tMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwFepWL9I2plWiepM7BFkjTn9ZZ9bir5vKcvTsu8IjvLJuoayEP92c/yR+ArWRPVGFEk49yCT4wzhQ1bQXI/oJ1XmoZaJZVXcwXFDKNaaZcc8UDusisZvyl3rPJbMgumsRQK8UTUAAvQFLPlQTAHDAq2ZPR8uU5zXtTgfq0EUDkY66jjbbxPbul7rpWRYkP9Z7b4HwG9okQGmEZt51Wn4d9nDNjXuUFXYxEuMm085ynOXZ015EPGpbzVtLs4PHfJeMel3pyYBXJI6VFbXbt7G/wh1GFAbKU9fGIQMR0DskP2r+9cTrtegwlDWpNpv/BwNdKHn2jMNomWJxqPMRlD1ywIDAQABMA0GCSqGSIb3DQEBBQUAA4IBAQC4u05QIe46gAUZNDNwmAbao1S6Br/P89IiaK9zwfmfB+cduQa3CIzRE2CMLC3gVNIcmx/1JvxpYhrUviqrtimy5Nst6eUt51fog4BFaM58TeKOs09bz3a+WCDPjDOAxSGMGEgYdOkhyDvTEiRtBdc+sdSM2HzNWFOfqCvb+sBk69dI3qUNubtO2cucDqzdayY8FSxS2aQp/lIRlm9Y19Y1AcHWWlsYcuKHixNPEeow4YLDeap1ZzIvqlZFgX5X72j9Wt4jNZxTqTeoqHbohz1bEq/v1JX76hIqT8xQ8MFCbGk8b1XRF+XrNuNqwKJt4SJQlkMmbZENsgqufw2afuOF-----END CERTIFICATE-----
+# If your GM is outside the cloud, you must uncomment the line below so that
+# the floating IP is configured in the GM for this member.
+      #nat_ip: { get_attr: [ floating_ip, floating_ip_address ] }
       remote_console_enabled: true
-      admin_password: foobar
+      admin_password: infoblox
+
+  grid_member_ns_group_entry:
+    type: Infoblox::Grid::NameServerGroupMember
+    properties:
+# You need to define the group in the GM and list its name here.
+      group_name: default
+      member_role: grid_secondary
+# The name: of the member_server must be the grid member name.
+      member_server: { name: { get_attr: [grid_member, name] } }
 
   server:
     type: OS::Nova::Server
     properties:
       name: { list_join: [ '-', [ 'nios', { get_resource: host_name } ]] }
-      flavor: vnios8xx.55
-      image: nios-7.2.0-demo-8xx-55.qcow2
+      flavor: vnios810.55
+      image: nios-7.2.3-810-55.qcow2
+# The mgmt IP is allocated by OpenStack but not configured in the GM. However,
+# we need to list it here since LAN1 needs to be the second NIC
       networks: [{network: {get_param: mgmt_network} }, {port: { get_resource: lan1_port}} ]
       user_data_format: RAW
       user_data: { get_attr: [grid_member, user_data] }
       metadata: {"metering.stack": {get_param: parent_stack_id}, 'nios': 'true'}
+outputs:
+  member_service_address:
+    value: { get_attr: [lan1_port, fixed_ips] }
+  user_data:
+    value: { get_attr: [grid_member, user_data] }

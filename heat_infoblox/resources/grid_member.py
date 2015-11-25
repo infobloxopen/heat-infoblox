@@ -173,6 +173,7 @@ class GridMember(resource.Resource):
         ),
         MGMT_PORT: resource_utils.port_schema(MGMT_PORT, False),
         LAN1_PORT: resource_utils.port_schema(LAN1_PORT, True),
+        LAN2_PORT: resource_utils.port_schema(LAN2_PORT, False),
         DNS_SETTINGS: properties.Schema(
             properties.Schema.MAP,
             _('The DNS settings for this member.'),
@@ -219,9 +220,16 @@ class GridMember(resource.Resource):
             self.infoblox_object = resource_utils.connect_to_infoblox()
         return self.infoblox_object
 
-    def handle_create(self):
+    def _make_port_network_settings(self, port_name):
+        if self.properties[port_name] is None:
+            return None
+
         port = self.client('neutron').show_port(
-            self.properties[self.LAN1_PORT])['port']
+            self.properties[port_name])['port']
+
+        if port is None:
+            return None
+
         ipv4 = None
         ipv6 = None
         for ip in port['fixed_ips']:
@@ -230,12 +238,18 @@ class GridMember(resource.Resource):
             else:
                 if ipv4 is None:
                     ipv4 = self._make_network_settings(ip)
+        return {'ipv4': ipv4, 'ipv6': ipv6}
+
+    def handle_create(self):
+        mgmt = self._make_port_network_settings(self.MGMT_PORT)
+        lan1 = self._make_port_network_settings(self.LAN1_PORT)
+        lan2 = self._make_port_network_settings(self.LAN2_PORT)
 
         name = self.properties[self.NAME]
         nat = self.properties[self.NAT_IP]
 
-        self.infoblox().create_member(name=name, ipv4=ipv4,
-                                      ipv6=ipv6, nat_ip=nat)
+        self.infoblox().create_member(name=name, mgmt=mgmt, lan1=lan1,
+                                      lan2=lan2, nat_ip=nat)
         self.infoblox().pre_provision_member(
             name,
             hwmodel=self.properties[self.MODEL], hwtype='IB-VNIOS',
@@ -250,8 +264,27 @@ class GridMember(resource.Resource):
 
         self.resource_id_set(name)
 
+    def _remove_from_all_ns_groups(self):
+        # This is a workaround needed because Juno Heat does not honor
+        # dependencies in nested autoscale group stacks.
+        fields = {'name', 'grid_primary', 'grid_secondaries'}
+        groups = self.infoblox().get_all_ns_groups(return_fields=fields)
+        for group in groups:
+            new_list = {}
+            changed = False
+            for field in ('grid_primary', 'grid_secondaries'):
+                new_list[field] = []
+                for member in group[field]:
+                    if member['name'] != self.resource_id:
+                        new_list[field].append(member)
+                    else:
+                        changed = True
+            if changed:
+                self.infoblox().update_ns_group(group['name'], new_list)
+
     def handle_delete(self):
         if self.resource_id is not None:
+            self._remove_from_all_ns_groups()
             self.infoblox().delete_member(self.resource_id)
 
     def _make_user_data(self, member, token):
@@ -314,16 +347,16 @@ class GridMember(resource.Resource):
         return token
 
     def _resolve_attribute(self, name):
-        member_name = self.properties[self.NAME]
+        member_name = self.resource_id
         member = self.infoblox().get_member(
             member_name,
-            return_fields=['vip_setting', 'ipv6_setting'])[0]
+            return_fields=['host_name', 'vip_setting', 'ipv6_setting'])[0]
         token = self._get_member_tokens(member)
         LOG.debug("MEMBER for %s = %s" % (name, member))
         if name == self.USER_DATA:
             return self._make_user_data(member, token)
         if name == self.NAME_ATTR:
-            return member['name']
+            return member['host_name']
         return None
 
 

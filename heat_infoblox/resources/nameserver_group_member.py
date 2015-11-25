@@ -126,8 +126,9 @@ class NameServerGroupMember(resource.Resource):
             return_fields=['name', 'grid_primary', 'grid_secondaries']
         )
         if len(groups) == 0:
-            raise exception.EntityNotFound(entity='Name Server Group',
-                                           name=group_name)
+            raise exception.NotFound(
+                'Name Server Group %s not found' % group_name
+            )
         return groups[0]
 
     def handle_create(self):
@@ -150,6 +151,7 @@ class NameServerGroupMember(resource.Resource):
         )
 
     def handle_delete(self):
+        LOG.debug("NSGROUP %s DELETE" % self.resource_id)
         if self.resource_id is None:
             return None
 
@@ -161,7 +163,9 @@ class NameServerGroupMember(resource.Resource):
 
         group = self._get_ns_group(group_name)
 
+        LOG.debug("NSGROUP for DELETE: %s" % group)
         self._remove_member(group[field_name], member)
+        LOG.debug("NSGROUP update DELETE: %s" % group)
         self.infoblox().update_ns_group(group_name, group)
 
     def _resolve_attribute(self, name):
