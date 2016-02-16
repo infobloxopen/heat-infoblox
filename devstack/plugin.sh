@@ -2,6 +2,7 @@
 
 function install_heat_infoblox {
     cd $HEAT_INFOBLOX_DIR
+    sudo pip install -r requirements.txt
     sudo python setup.py install
 }
 
