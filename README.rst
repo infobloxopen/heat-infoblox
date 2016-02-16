@@ -10,8 +10,9 @@ Enabling In DevStack
 To enable use of Infoblox Heat resources in DevStack, add this repository as a
 plugin:
 
-     enable_plugin heat-infoblox https://github.com/infobloxopen/heat-infoblox.git
-     enable_service heat-infoblox
+::
+
+  enable_plugin heat-infoblox https://github.com/infobloxopen/heat-infoblox.git
 
 
 Features
