@@ -28,16 +28,11 @@ class ResourceUtilsTest(common.HeatTestCase):
 
     def test_wapi_config_file(self):
 
-        for opt in ['wapi_url', 'username', 'password']:
-            cfg.CONF.set_override(name=opt,
-                                  override='test_%s' % opt,
-                                  group='infoblox')
-
-        cfg.CONF.set_override(name='sslverify',
-                              override=False,
-                              group='infoblox')
         connector.Infoblox = mock.MagicMock()
-        resource_utils.connect_to_infoblox()
+        resource_utils.connect_to_infoblox({'url': 'test_wapi_url',
+                                            'username': 'test_username',
+                                            'password': 'test_password',
+                                            'sslverify': False})
         connector.Infoblox.assert_called_with({'url': 'test_wapi_url',
                                                'username': 'test_username',
                                                'password': 'test_password',

@@ -8,6 +8,7 @@ resources:
   grid_member:
     type: Infoblox::Grid::Member
     properties:
+      connection: { url: "https://172.22.128.92/wapi/v2.3", username: admin, password: infoblox, sslverify: False }
       name: nios-test.infoblox.local
       model: IB-VM-820
       LAN1: 121749db-d096-49f5-a483-1209b55890ef
