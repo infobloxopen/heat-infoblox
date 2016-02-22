@@ -22,6 +22,9 @@ from heat.engine import properties
 from heat.engine import resource
 from heat.engine import support
 
+from heat_infoblox import constants
+from heat_infoblox import resource_utils
+
 import infoblox_netmri as netmri
 
 LOG = logging.getLogger(__name__)
@@ -31,13 +34,11 @@ class NetMRIJob(resource.Resource):
     '''A resource which represents a job executed in NetMRI.'''
 
     PROPERTIES = (
-        CONNECTION, URL, USERNAME, PASSWORD, SSLVERIFY,
         SOURCE, SCRIPT, JOB_SPEC, TEMPLATE,
         WAIT, INPUTS, TARGETS,
         DEVICE_ID, DEVICE_IP_ADDR, DEVICE_NET_IP_ADDR,
         NETWORK_VIEW
     ) = (
-        'connection', 'url', 'username', 'password', 'sslverify',
         'source', 'script', 'job_specification', 'config_template',
         'wait', 'inputs', 'targets',
         'device_id', 'device_ip_address', 'device_netview_ip_addr',
@@ -55,33 +56,8 @@ class NetMRIJob(resource.Resource):
     support_status = support.SupportStatus(support.UNSUPPORTED)
 
     properties_schema = {
-        CONNECTION: properties.Schema(
-            properties.Schema.MAP,
-            required=True,
-            schema={
-                URL: properties.Schema(
-                    properties.Schema.STRING,
-                    _('The URL to the NetMRI API (example: '
-                      'https://netmri/api/3.0)'),
-                    required=True
-                ),
-                USERNAME: properties.Schema(
-                    properties.Schema.STRING,
-                    _('The username for NetMRI.'),
-                    required=True
-                ),
-                PASSWORD: properties.Schema(
-                    properties.Schema.STRING,
-                    _('The password for NetMRI.'),
-                    required=True
-                ),
-                SSLVERIFY: properties.Schema(
-                    properties.Schema.BOOLEAN,
-                    _('If True, the SSL certificate will be validated.'),
-                    default=True
-                ),
-            }
-        ),
+        constants.CONNECTION:
+            resource_utils.connection_schema(constants.NETMRI),
         SOURCE: properties.Schema(
             properties.Schema.MAP,
             required=True,
@@ -98,17 +74,14 @@ class NetMRIJob(resource.Resource):
                     properties.Schema.STRING,
                     _('The name or ID of the config template to run.')
                 ),
-            }
-        ),
+            }),
         WAIT: properties.Schema(
             properties.Schema.BOOLEAN,
             _('If true, the create will wait until the job completes.'),
-            default=True
-        ),
+            default=True),
         INPUTS: properties.Schema(
             properties.Schema.MAP,
-            _('The key/value pair inputs for the job.')
-        ),
+            _('The key/value pair inputs for the job.')),
         TARGETS: properties.Schema(
             properties.Schema.LIST,
             _('A list of targets (devices) against which to execute '
@@ -133,9 +106,7 @@ class NetMRIJob(resource.Resource):
                           'if specifying an IP and there are multiple network '
                           'views in the NetMRI.')
                     ),
-                },
-            ),
-        ),
+                })),
     }
 
     attributes_schema = {
@@ -153,7 +124,7 @@ class NetMRIJob(resource.Resource):
     def netmri(self):
         if not getattr(self, 'netmri_object', None):
             self.netmri_object = netmri.InfobloxNetMRI(
-                self.properties[self.CONNECTION]
+                self.properties[constants.CONNECTION]
             )
         return self.netmri_object
 

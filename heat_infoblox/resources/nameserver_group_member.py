@@ -22,6 +22,7 @@ from heat.engine import properties
 from heat.engine import resource
 from heat.engine import support
 
+from heat_infoblox import constants
 from heat_infoblox import resource_utils
 
 
@@ -60,17 +61,17 @@ class NameServerGroupMember(resource.Resource):
         _('See support.infoblox.com for support.'))
 
     properties_schema = {
+        constants.CONNECTION:
+            resource_utils.connection_schema(constants.DDI),
         GROUP_NAME: properties.Schema(
             properties.Schema.STRING,
-            _('Name server group name.'),
-        ),
+            _('Name server group name.')),
         MEMBER_ROLE: properties.Schema(
             properties.Schema.STRING,
             _('The role the member plays in the group.'),
             constraints=[
                 constraints.AllowedValues(MEMBER_ROLES)
-            ]
-        ),
+            ]),
         MEMBER_SERVER: properties.Schema(
             properties.Schema.MAP,
             _('A grid member settings in this group.'),
@@ -92,8 +93,7 @@ class NameServerGroupMember(resource.Resource):
                       'secondary for the group.'),
                     default=False
                 ),
-            }
-        ),
+            }),
     }
 
     attributes_schema = {
@@ -104,7 +104,8 @@ class NameServerGroupMember(resource.Resource):
 
     def infoblox(self):
         if not getattr(self, 'infoblox_object', None):
-            self.infoblox_object = resource_utils.connect_to_infoblox()
+            conn = self.properties[constants.CONNECTION]
+            self.infoblox_object = resource_utils.connect_to_infoblox(conn)
         return self.infoblox_object
 
     def _remove_member(self, member_list, member):
