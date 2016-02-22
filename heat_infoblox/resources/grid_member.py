@@ -23,6 +23,7 @@ from heat.engine import properties
 from heat.engine import resource
 from heat.engine import support
 
+from heat_infoblox import constants
 from heat_infoblox import resource_utils
 
 
@@ -116,17 +117,17 @@ class GridMember(resource.Resource):
         _('See support.infoblox.com for support.'))
 
     properties_schema = {
+        constants.CONNECTION:
+            resource_utils.connection_schema(constants.DDI),
         NAME: properties.Schema(
             properties.Schema.STRING,
-            _('Member name.'),
-        ),
+            _('Member name.')),
         MODEL: properties.Schema(
             properties.Schema.STRING,
             _('Infoblox model name.'),
             constraints=[
                 constraints.AllowedValues(ALLOWED_MODELS)
-            ]
-        ),
+            ]),
         LICENSES: properties.Schema(
             properties.Schema.LIST,
             _('List of licenses to pre-provision.'),
@@ -135,8 +136,7 @@ class GridMember(resource.Resource):
             ),
             constraints=[
                 constraints.AllowedValues(ALLOWED_LICENSES_PRE_PROVISION)
-            ]
-        ),
+            ]),
         TEMP_LICENSES: properties.Schema(
             properties.Schema.LIST,
             _('List of temporary licenses to apply to the member.'),
@@ -145,32 +145,26 @@ class GridMember(resource.Resource):
             ),
             constraints=[
                 constraints.AllowedValues(ALLOWED_LICENSES_TEMP)
-            ]
-        ),
+            ]),
         REMOTE_CONSOLE: properties.Schema(
             properties.Schema.BOOLEAN,
-            _('Enable the remote console.')
-        ),
+            _('Enable the remote console.')),
         ADMIN_PASSWORD: properties.Schema(
             properties.Schema.STRING,
-            _('The password to use for the admin user.')
-        ),
+            _('The password to use for the admin user.')),
         GM_IP: properties.Schema(
             properties.Schema.STRING,
             _('The Gridmaster IP address.'),
-            required=True
-        ),
+            required=True),
         GM_CERTIFICATE: properties.Schema(
             properties.Schema.STRING,
             _('The Gridmaster SSL certificate for verification.'),
-            required=False
-        ),
+            required=False),
         NAT_IP: properties.Schema(
             properties.Schema.STRING,
             _('If the GM will see this member as a NATed address, enter that '
               'address here.'),
-            required=False
-        ),
+            required=False),
         MGMT_PORT: resource_utils.port_schema(MGMT_PORT, False),
         LAN1_PORT: resource_utils.port_schema(LAN1_PORT, True),
         LAN2_PORT: resource_utils.port_schema(LAN2_PORT, False),
@@ -184,8 +178,7 @@ class GridMember(resource.Resource):
                     _('If true, enable DNS on this member.'),
                     default=False
                 ),
-            }
-        )
+            })
     }
 
     attributes_schema = {
@@ -217,7 +210,8 @@ class GridMember(resource.Resource):
 
     def infoblox(self):
         if not getattr(self, 'infoblox_object', None):
-            self.infoblox_object = resource_utils.connect_to_infoblox()
+            conn = self.properties[constants.CONNECTION]
+            self.infoblox_object = resource_utils.connect_to_infoblox(conn)
         return self.infoblox_object
 
     def _make_port_network_settings(self, port_name):
