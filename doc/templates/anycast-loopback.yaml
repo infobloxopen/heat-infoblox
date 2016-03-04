@@ -1,0 +1,24 @@
+heat_template_version: 2014-10-16
+description: Template to deploy an Anycast Loopback on existent Grid
+parameters:
+  ip:
+    type: string
+    description: Ip address to assign to Loopback Interface
+  grid_members:
+    type: comma_delimited_list
+    description: Comma delimited list of Grid Member host names
+  enable_bgp:
+    type: boolean
+    description: Determines if the BGP advertisement setting is enabled for this interface or not.
+  enable_ospf:
+    type: boolean
+    description: Determines if the OSPF advertisement setting is enabled for this interface or not.
+resources:
+  anycast:
+    type: Infoblox::Grid::AnycastLoopback
+    properties:
+      connection: { url: "https://10.40.240.113/wapi/v2.3/", username: admin, password: infoblox, sslverify: False }
+      ip: { get_param: ip }
+      grid_members: { get_param: grid_members }
+      enable_bgp: { get_param: enable_bgp }
+      enable_ospf: { get_param: enable_ospf }
