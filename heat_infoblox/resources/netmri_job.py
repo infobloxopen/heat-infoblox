@@ -53,7 +53,9 @@ class NetMRIJob(resource.Resource):
         'job_details'
     )
 
-    support_status = support.SupportStatus(support.UNSUPPORTED)
+    support_status = support.SupportStatus(
+        support.UNSUPPORTED,
+        _('See support.infoblox.com for support.'))
 
     properties_schema = {
         constants.CONNECTION:
