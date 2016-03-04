@@ -30,15 +30,18 @@ import infoblox_netmri as netmri
 LOG = logging.getLogger(__name__)
 
 
-class NetMRIJob(resource.Resource):
-    '''A resource which represents a job executed in NetMRI.'''
+class NetMRIManagedResource(resource.Resource):
+    '''A resource managed via NetMRI jobs. The user may specify separate
+       scripts for create and delete.'''
 
     PROPERTIES = (
+        CREATE_JOB, DELETE_JOB,
         SOURCE, SCRIPT, JOB_SPEC, TEMPLATE,
         WAIT, INPUTS, TARGETS,
         DEVICE_ID, DEVICE_IP_ADDR, DEVICE_NET_IP_ADDR,
         NETWORK_VIEW
     ) = (
+        'create_job', 'delete_job',
         'source', 'script', 'job_specification', 'config_template',
         'wait', 'inputs', 'targets',
         'device_id', 'device_ip_address', 'device_netview_ip_addr',
@@ -55,9 +58,7 @@ class NetMRIJob(resource.Resource):
 
     support_status = support.SupportStatus(support.UNSUPPORTED)
 
-    properties_schema = {
-        constants.CONNECTION:
-            resource_utils.connection_schema(constants.NETMRI),
+    job_schema = {
         SOURCE: properties.Schema(
             properties.Schema.MAP,
             required=True,
@@ -77,7 +78,7 @@ class NetMRIJob(resource.Resource):
             }),
         WAIT: properties.Schema(
             properties.Schema.BOOLEAN,
-            _('If true, the create will wait until the job completes.'),
+            _('If true, the action will wait until the job completes.'),
             default=True),
         INPUTS: properties.Schema(
             properties.Schema.MAP,
@@ -109,9 +110,26 @@ class NetMRIJob(resource.Resource):
                 })),
     }
 
+    properties_schema = {
+        constants.CONNECTION:
+            resource_utils.connection_schema(constants.NETMRI),
+        CREATE_JOB: properties.Schema(
+            properties.Schema.MAP,
+            _("The job to execute on resource creation."),
+            required=True,
+            schema=job_schema
+        ),
+        DELETE_JOB: properties.Schema(
+            properties.Schema.MAP,
+            _("The job to execute on resource deletion."),
+            required=True,
+            schema=job_schema
+        )
+    }
+
     attributes_schema = {
         JOB: attributes.Schema(
-            _('The job object as returned by the NetMRI API.'),
+            _('The create job object as returned by the NetMRI API.'),
             attributes.Schema.MAP
         ),
         JOB_DETAILS: attributes.Schema(
@@ -130,13 +148,13 @@ class NetMRIJob(resource.Resource):
             )
         return self.netmri_object
 
-    def _device_ids(self):
+    def _device_ids(self, job_map):
         ids = set()
         ips = set()
         view_names = set()
         need_all_views = False
         need_lookup = []
-        for t in self.properties[self.TARGETS]:
+        for t in job_map[self.TARGETS]:
             device_id = t.get(self.DEVICE_ID, None)
             if device_id:
                 ids.add(device_id)
@@ -207,17 +225,18 @@ class NetMRIJob(resource.Resource):
 
         return list(ids)
 
-    def handle_create(self):
+    def _execute_job(self, which_job):
         params = {}
-        script = self.properties[self.SOURCE][self.SCRIPT]
+        job_map = self.properties[which_job]
+        script = job_map[self.SOURCE][self.SCRIPT]
         if script.isdigit():
             params['id'] = script
         else:
             params['name'] = script
 
-        params['device_ids'] = self._device_ids()
+        params['device_ids'] = self._device_ids(job_map)
 
-        raw_inputs = self.properties[self.INPUTS] or {}
+        raw_inputs = job_map[self.INPUTS] or {}
         inputs = {}
         for var in raw_inputs:
             if var.startswith('$'):
@@ -227,14 +246,21 @@ class NetMRIJob(resource.Resource):
 
         params.update(inputs)
 
-        r = self.netmri.api_request('scripts/run', params)
+        return self.netmri.api_request('scripts/run', params)
+
+    def handle_create(self):
+        r = self._execute_job(self.CREATE_JOB)
         self.resource_id_set(r['JobID'])
 
     def check_create_complete(self, handler_data):
-        if not self.properties[self.WAIT]:
+        if not self.properties[self.CREATE_JOB][self.WAIT]:
             return True
 
-        job = self.netmri.show('job', int(self.resource_id))['job']
+        job_id = int(self.resource_id)
+        return self._check_job_complete(job_id)
+
+    def _check_job_complete(self, job_id):
+        job = self.netmri.show('job', job_id)['job']
         LOG.debug("job = %s", job)
         if job['completed_at']:
             return True
@@ -242,7 +268,7 @@ class NetMRIJob(resource.Resource):
         return False
 
     def handle_delete(self):
-        pass
+        self._execute_job(self.DELETE_JOB)
 
     def _get_job_details(self):
         details = self.netmri.api_request('job_details/index',
@@ -270,5 +296,5 @@ class NetMRIJob(resource.Resource):
 
 def resource_mapping():
     return {
-        'Infoblox::NetMRI::Job': NetMRIJob,
+        'Infoblox::NetMRI::ManagedResource': NetMRIManagedResource,
     }
