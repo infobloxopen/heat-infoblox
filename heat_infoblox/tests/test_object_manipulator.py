@@ -14,6 +14,7 @@
 #    under the License.
 
 
+import copy
 import mock
 import testtools
 
@@ -141,3 +142,97 @@ class TestObjectManipulator(testtools.TestCase):
                           MEMBER_WITH_ANYCAST_IP['additional_ip_list']}),
             mock.call(members[1]['_ref'], {'additional_ip_list': []})]
         self._test_delete_anycast_loopback(ip, members, expected_calls)
+
+    def _test_create_ospf(self, members, ospf_options, expected_options):
+        member_name = 'my_member'
+
+        connector = mock.Mock()
+        connector.get_object.return_value = members
+        om = object_manipulator.InfobloxObjectManipulator(connector)
+        om.create_ospf(member_name, ospf_options)
+
+        connector.get_object.assert_called_once_with(
+            'member', {'host_name': member_name},
+            ['ospf_list'], extattrs=None)
+        connector.update_object.assert_called_once_with(
+            members[0]['_ref'], {'ospf_list': expected_options})
+
+    def test_create_ospf(self):
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'ospf_list': []}]
+        ospf_options = dict(advertise_interface_vlan=10,
+                            area_id='1',
+                            area_type='STANDARD',
+                            authentication_type='NONE',
+                            interface='IP',
+                            is_ipv4=True,
+                            auto_calc_cost_enabled=True)
+        expected_option = [ospf_options]
+        self._test_create_ospf(members, ospf_options, expected_option)
+
+    def test_create_ospf_with_existent_settings(self):
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'ospf_list': [{'area_id': '5',
+                            'area_type': 'STANDARD',
+                            'authentication_type': 'NONE',
+                            'interface': 'IP',
+                            'is_ipv4': 'true'}]}]
+        ospf_options = dict(advertise_interface_vlan=10,
+                            area_id='1',
+                            area_type='STANDARD',
+                            authentication_type='NONE',
+                            interface='IP',
+                            is_ipv4=True,
+                            auto_calc_cost_enabled=True)
+
+        expected_option = copy.deepcopy(members[0]['ospf_list'])
+        expected_option.append(ospf_options)
+        self._test_create_ospf(members, ospf_options, expected_option)
+
+    def _test_delete_ospf(self, members, expected_options):
+        area_id = '5'
+        member_name = 'my_member'
+        connector = mock.Mock()
+        connector.get_object.return_value = members
+
+        om = object_manipulator.InfobloxObjectManipulator(connector)
+        om.delete_ospf(area_id, member_name)
+
+        connector.get_object.assert_called_once_with(
+            'member', {'host_name': 'my_member'},
+            ['ospf_list'], extattrs=None)
+        connector.update_object.assert_called_once_with(
+            members[0]['_ref'], expected_options)
+
+    def test_delete_ospf_single(self):
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'ospf_list': [{'area_id': '5',
+                            'area_type': 'STANDARD',
+                            'authentication_type': 'NONE',
+                            'interface': 'IP',
+                            'is_ipv4': 'true'}]}]
+        expected_options = {'ospf_list': []}
+        self._test_delete_ospf(members, expected_options)
+
+    def test_delete_ospf_multiple(self):
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'ospf_list': [{'area_id': '5',
+                            'area_type': 'STANDARD',
+                            'authentication_type': 'NONE',
+                            'interface': 'IP',
+                            'is_ipv4': 'true'},
+                           {'area_id': '2',
+                            'area_type': 'STANDARD',
+                            'authentication_type': 'NONE',
+                            'interface': 'IP',
+                            'is_ipv4': 'true'}]}]
+        expected_options = {'ospf_list': [{'area_id': '2',
+                                           'area_type': 'STANDARD',
+                                           'authentication_type': 'NONE',
+                                           'interface': 'IP',
+                                           'is_ipv4': 'true'}]}
+        self._test_delete_ospf(members, expected_options)
