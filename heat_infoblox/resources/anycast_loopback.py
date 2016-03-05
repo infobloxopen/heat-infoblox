@@ -39,6 +39,8 @@ class AnycastLoopback(resource.Resource):
         'ip', 'grid_members', 'enable_bgp', 'enable_ospf',
         )
 
+    DELIM = '/'
+
     support_status = support.SupportStatus(
         support.UNSUPPORTED,
         _('See support.infoblox.com for support.'))
@@ -77,17 +79,26 @@ class AnycastLoopback(resource.Resource):
         return self.infoblox_object
 
     def handle_create(self):
-        for member_name in self.GRID_MEMBERS:
-            self.infoblox.create_anycast_loopback(member_name,
-                                                  self.IP,
-                                                  self.ENABLE_BGP,
-                                                  self.ENABLE_OSPF)
-        self.resource_id_set(self.IP)
+        ip = self.properties[self.IP]
+        for member_name in self.properties[self.GRID_MEMBERS]:
+            self.infoblox.create_anycast_loopback(
+                member_name,
+                ip,
+                self.properties[self.ENABLE_BGP],
+                self.properties[self.ENABLE_OSPF])
+
+        identifiers = [ip] + self.properties[self.GRID_MEMBERS]
+        resource_id = self.DELIM.join(identifiers)
+        self.resource_id_set(resource_id)
 
     def handle_delete(self):
-        ip = self.resource_id
-        if ip is not None:
-            self.infoblox.delete_anycast_loopback(ip)
+        if self.resource_id:
+            identifiers = self.resource_id.split(self.DELIM)
+            if len(identifiers) > 1:
+                ip = identifiers[0]
+                members = identifiers[1:]
+                for member in members:
+                    self.infoblox.delete_anycast_loopback(ip, member)
 
 
 def resource_mapping():

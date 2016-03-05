@@ -111,6 +111,7 @@ class InfobloxObjectManipulator(object):
             LOG.error(_("Grid Member %(name)s is not found, can not assign "
                         "Anycast Loopback ip %(ip)s"),
                       {'name': member_name, 'ip': ip})
+            return
         additional_ip_list = member['additional_ip_list'] + [anycast_loopback]
 
         payload = {'additional_ip_list': additional_ip_list}
