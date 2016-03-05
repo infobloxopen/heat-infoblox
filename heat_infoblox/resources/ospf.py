@@ -125,7 +125,7 @@ class Ospf(resource.Resource):
         KEY_ID: properties.Schema(
             properties.Schema.INTEGER,
             _('The hash key identifier to use for'
-              ' “MESSAGE_DIGEST” authentication.')),
+              ' "MESSAGE_DIGEST" authentication.')),
         RETRANSMIT_INTERVAL: properties.Schema(
             properties.Schema.INTEGER,
             _('The retransmit interval time of OSPF (in seconds).')),
