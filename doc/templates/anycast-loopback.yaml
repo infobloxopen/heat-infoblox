@@ -10,9 +10,11 @@ parameters:
   enable_bgp:
     type: boolean
     description: Determines if the BGP advertisement setting is enabled for this interface or not.
+    default: False
   enable_ospf:
     type: boolean
     description: Determines if the OSPF advertisement setting is enabled for this interface or not.
+    default: False
 resources:
   anycast:
     type: Infoblox::Grid::AnycastLoopback
