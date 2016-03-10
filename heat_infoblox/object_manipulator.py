@@ -87,6 +87,73 @@ class InfobloxObjectManipulator(object):
         member_data = {'host_name': member_name}
         self._delete_infoblox_object('member', member_data)
 
+    def create_anycast_loopback(self, member_name, ip, enable_bgp=False,
+                                enable_ospf=False):
+        anycast_loopback = {
+            'anycast': True,
+            'enable_bgp': enable_bgp,
+            'enable_ospf': enable_ospf,
+            'interface': 'LOOPBACK'}
+        if ':' in ip:
+            anycast_loopback['ipv6_network_setting'] = {
+                'virtual_ip': ip}
+        else:
+            anycast_loopback['ipv4_network_setting'] = {
+                'address': ip,
+                'subnet_mask': '255.255.255.255'}
+
+        member = self._get_infoblox_object_or_none(
+            'member', {'host_name': member_name},
+            return_fields=['additional_ip_list'])
+
+        # Should we raise some exception here or just log object not found?
+        if not member:
+            LOG.error(_("Grid Member %(name)s is not found, can not assign "
+                        "Anycast Loopback ip %(ip)s"),
+                      {'name': member_name, 'ip': ip})
+            return
+        additional_ip_list = member['additional_ip_list'] + [anycast_loopback]
+
+        payload = {'additional_ip_list': additional_ip_list}
+        self._update_infoblox_object_by_ref(member['_ref'], payload)
+
+    def delete_anycast_loopback(self, ip, member_name=None):
+        """Delete anycast loopback ip address.
+
+        :param ip: anycast ip address to delete from loopback interface
+        :param member_name: name of grid member on which anycast ip should
+                            be deleted. If member name is None, then anycast
+                            address is deleted from each member where found.
+        """
+        members_for_update = []
+        if member_name:
+            member = self._get_infoblox_object_or_none(
+                'member', {'host_name': member_name},
+                return_fields=['additional_ip_list'])
+            if member and member['additional_ip_list']:
+                members_for_update.append(member)
+        else:
+            members_for_update = self.connector.get_object(
+                'member', return_fields=['additional_ip_list'])
+
+        for member in members_for_update:
+            # update members only if address to remove is found
+            update_this_member = False
+            new_ip_list = []
+            for iface in member['additional_ip_list']:
+                ipv4 = iface.get('ipv4_network_setting')
+                if ipv4 and ip in ipv4['address']:
+                    update_this_member = True
+                    continue
+                ipv6 = iface.get('ipv6_network_setting')
+                if ipv6 and ip in ipv6['virtual_ip']:
+                    update_this_member = True
+                    continue
+                new_ip_list.append(iface)
+            if update_this_member:
+                payload = {'additional_ip_list': new_ip_list}
+                self._update_infoblox_object_by_ref(member['_ref'], payload)
+
     def get_all_ns_groups(self, return_fields=None, extattrs=None):
         obj = {}
         return self.connector.get_object(
@@ -102,6 +169,38 @@ class InfobloxObjectManipulator(object):
     def update_ns_group(self, group_name, group):
         self._update_infoblox_object('nsgroup', {'name': group_name},
                                      group)
+
+    def create_ospf(self, member_name, ospf_options_dict):
+        """Add ospf settings to the grid member."""
+        member = self._get_infoblox_object_or_none(
+            'member', {'host_name': member_name},
+            return_fields=['ospf_list'])
+
+        # Should we raise some exception here or just log object not found?
+        if not member:
+            LOG.error(_("Grid Member %(name)s is not found"),
+                      {'name': member_name})
+        ospf_list = member['ospf_list'] + [ospf_options_dict]
+        payload = {'ospf_list': ospf_list}
+        self._update_infoblox_object_by_ref(member['_ref'], payload)
+
+    def delete_ospf(self, area_id, member_name):
+        """Delete ospf setting for particular area_id from the grid member."""
+        member = self._get_infoblox_object_or_none(
+            'member', {'host_name': member_name},
+            return_fields=['ospf_list'])
+        if member and member['ospf_list']:
+            # update member only if area_id match
+            update_this_member = False
+            new_ospf_list = []
+            for ospf_settings in member['ospf_list']:
+                if str(area_id) == ospf_settings.get('area_id'):
+                    update_this_member = True
+                    continue
+                new_ospf_list.append(ospf_settings)
+            if update_this_member:
+                payload = {'ospf_list': new_ospf_list}
+                self._update_infoblox_object_by_ref(member['_ref'], payload)
 
     def create_dns_view(self, net_view_name, dns_view_name):
         dns_view_data = {'name': dns_view_name,
