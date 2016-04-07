@@ -3,7 +3,7 @@
 function install_heat_infoblox {
     cd $HEAT_INFOBLOX_DIR
     sudo pip install -r requirements.txt
-    sudo python setup.py install
+    sudo python setup.py develop
 }
 
 function init_heat_infoblox {
@@ -12,10 +12,6 @@ function init_heat_infoblox {
 
 function configure_heat_infoblox {
     iniset $HEAT_CONF DEFAULT plugin_dirs "$HEAT_INFOBLOX_DIR/heat_infoblox,/usr/lib64/heat,/usr/lib/heat"
-    iniset $HEAT_CONF infoblox wapi_url $HEAT_INFOBLOX_WAPI_URL
-    iniset $HEAT_CONF infoblox username $HEAT_INFOBLOX_USERNAME
-    iniset $HEAT_CONF infoblox password $HEAT_INFOBLOX_PASSWORD
-    iniset $HEAT_CONF infoblox sslverify $HEAT_INFOBLOX_SSLVERIFY
 }
 
 # check for service enabled

@@ -177,7 +177,7 @@ class GridMemberTest(common.HeatTestCase):
             'gridmaster:\n'
             '  token: abcdefg\n'
             '  ip_addr: 10.1.1.2\n'
-            '  certificate: testing\n',
+            '  certificate: |\n    testing\n',
             ud
         )
 
@@ -193,7 +193,7 @@ class GridMemberTest(common.HeatTestCase):
             'gridmaster:\n'
             '  token: abcdefg\n'
             '  ip_addr: 10.1.1.2\n'
-            '  certificate: testing\n',
+            '  certificate: |\n    testing\n',
             ud
         )
 
@@ -212,7 +212,7 @@ class GridMemberTest(common.HeatTestCase):
             'gridmaster:\n'
             '  token: abcdefg\n'
             '  ip_addr: 10.1.1.2\n'
-            '  certificate: testing\n',
+            '  certificate: |\n    testing\n',
             ud
         )
 
