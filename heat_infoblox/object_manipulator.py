@@ -111,6 +111,7 @@ class InfobloxObjectManipulator(object):
             LOG.error(_("Grid Member %(name)s is not found, can not assign "
                         "Anycast Loopback ip %(ip)s"),
                       {'name': member_name, 'ip': ip})
+            return
         additional_ip_list = member['additional_ip_list'] + [anycast_loopback]
 
         payload = {'additional_ip_list': additional_ip_list}
@@ -168,6 +169,38 @@ class InfobloxObjectManipulator(object):
     def update_ns_group(self, group_name, group):
         self._update_infoblox_object('nsgroup', {'name': group_name},
                                      group)
+
+    def create_ospf(self, member_name, ospf_options_dict):
+        """Add ospf settings to the grid member."""
+        member = self._get_infoblox_object_or_none(
+            'member', {'host_name': member_name},
+            return_fields=['ospf_list'])
+
+        # Should we raise some exception here or just log object not found?
+        if not member:
+            LOG.error(_("Grid Member %(name)s is not found"),
+                      {'name': member_name})
+        ospf_list = member['ospf_list'] + [ospf_options_dict]
+        payload = {'ospf_list': ospf_list}
+        self._update_infoblox_object_by_ref(member['_ref'], payload)
+
+    def delete_ospf(self, area_id, member_name):
+        """Delete ospf setting for particular area_id from the grid member."""
+        member = self._get_infoblox_object_or_none(
+            'member', {'host_name': member_name},
+            return_fields=['ospf_list'])
+        if member and member['ospf_list']:
+            # update member only if area_id match
+            update_this_member = False
+            new_ospf_list = []
+            for ospf_settings in member['ospf_list']:
+                if str(area_id) == ospf_settings.get('area_id'):
+                    update_this_member = True
+                    continue
+                new_ospf_list.append(ospf_settings)
+            if update_this_member:
+                payload = {'ospf_list': new_ospf_list}
+                self._update_infoblox_object_by_ref(member['_ref'], payload)
 
     def create_dns_view(self, net_view_name, dns_view_name):
         dns_view_data = {'name': dns_view_name,

@@ -321,9 +321,9 @@ class GridMember(resource.Resource):
             user_data += 'gridmaster:\n'
             user_data += '  token: %s\n' % token[0]['token']
             user_data += '  ip_addr: %s\n' % self.properties[self.GM_IP]
-            user_data += '  certificate: %s\n' % self.properties[
+            user_data += '  certificate: |\n    %s\n' % self.properties[
                 self.GM_CERTIFICATE
-            ]
+            ].replace('\n', '\n    ')
 
         LOG.debug('user_data: %s' % user_data)
 

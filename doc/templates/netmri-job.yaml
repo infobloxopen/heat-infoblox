@@ -16,12 +16,14 @@ resources:
   netmri_job:
     type: Infoblox::NetMRI::Job
     properties:
-      connection: { url: "https://netmri/api/3", username: admin, password: password, sslverify: False }
+      connection: { host: netmri, api_version: 3, username: admin, password: per1sc0pe1, sslverify: False, use_ssl: False }
       source: { script: "Ad Hoc Command Batch" }
       #targets: [ { device_id: { get_param: device_id } } ]
       targets: [ { device_ip_address: { get_param: device_ip }, network_view: { get_param: network_view } } ]
       inputs: { commands_to_be_executed: { get_param: command } }
       wait: True
 outputs:
-  job_id:
-    value: { get_attr: [netmri_job, id] }
+  job:
+    value: { get_attr: [netmri_job, job] }
+  job_details:
+    value: { get_attr: [netmri_job, job_details] }
