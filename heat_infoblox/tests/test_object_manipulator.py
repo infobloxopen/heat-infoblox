@@ -71,7 +71,8 @@ class TestObjectManipulator(testtools.TestCase):
         ip = 'fffe::5'
         expected_anycast_dict = {'anycast': True,
                                  'ipv6_network_setting':
-                                     {'virtual_ip': ip},
+                                     {'virtual_ip': ip,
+                                      'cidr_prefix': 128},
                                  'enable_bgp': True,
                                  'interface': 'LOOPBACK',
                                  'enable_ospf': True}
