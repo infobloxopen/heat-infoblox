@@ -142,25 +142,16 @@ class Ospf(resource.Resource):
         return self.infoblox_object
 
     def handle_create(self):
-        exclude_props = (self.GRID_MEMBERS,)
         ospf_options_dict = {
-            name: getattr(self, name) for name in self.PROPERTIES
-            if getattr(self, name) is not None and name not in exclude_props}
-        for member_name in self.GRID_MEMBERS:
+            name: self.properties.get(name) for name in self.PROPERTIES}
+        for member_name in self.properties[self.GRID_MEMBERS]:
             self.infoblox.create_ospf(member_name,
                                       ospf_options_dict)
-        identifiers = [self.AREA_ID] + self.GRID_MEMBERS
-        resource_id = self.DELIM.join(identifiers)
-        self.resource_id_set(resource_id)
+        self.resource_id_set(self.properties[self.AREA_ID])
 
     def handle_delete(self):
-        if self.resource_id:
-            identifiers = self.resource_id.split(self.DELIM)
-            if len(identifiers) > 1:
-                area_id = identifiers[0]
-                members = identifiers[1:]
-                for member in members:
-                    self.infoblox.delete_ospf(area_id, member)
+        for member in self.properties[self.GRID_MEMBERS]:
+            self.infoblox.delete_ospf(self.properties[self.AREA_ID], member)
 
 
 def resource_mapping():

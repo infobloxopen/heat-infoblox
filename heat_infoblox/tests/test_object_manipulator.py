@@ -143,6 +143,29 @@ class TestObjectManipulator(testtools.TestCase):
             mock.call(members[1]['_ref'], {'additional_ip_list': []})]
         self._test_delete_anycast_loopback(ip, members, expected_calls)
 
+    def test__copy_fields_or_raise(self):
+        fields = ['field-one', 'field-two']
+        source = {'field-one': 1,
+                  'field-two': 'text',
+                  'non-copy': 12}
+        dest = {}
+        object_manipulator.InfobloxObjectManipulator._copy_fields_or_raise(
+            source, dest, fields)
+        self.assertEqual(2, len(dest))
+        self.assertEqual(1, dest['field-one'])
+        self.assertEqual('text', dest['field-two'])
+
+    def test__copy_fields_or_raise_raises_value_error(self):
+        fields = ['field-one']
+        source = {'non-copy': 12}
+        dest = {}
+        objm = object_manipulator.InfobloxObjectManipulator
+        self.assertRaises(ValueError,
+                          objm._copy_fields_or_raise,
+                          source,
+                          dest,
+                          fields)
+
     def _test_create_ospf(self, members, ospf_options, expected_options):
         member_name = 'my_member'
 
@@ -164,12 +187,57 @@ class TestObjectManipulator(testtools.TestCase):
         ospf_options = dict(advertise_interface_vlan=10,
                             area_id='1',
                             area_type='STANDARD',
+                            authentication_key='12',
                             authentication_type='NONE',
                             interface='IP',
                             is_ipv4=True,
+                            key_id=12,
                             auto_calc_cost_enabled=True)
-        expected_option = [ospf_options]
-        self._test_create_ospf(members, ospf_options, expected_option)
+        expected_option = ospf_options.copy()
+        # Remove fields that are not used in current conditions
+        del expected_option['authentication_key']
+        del expected_option['key_id']
+        self._test_create_ospf(members, ospf_options, [expected_option])
+
+    def test_create_ospf_mesage_digest_and_ha(self):
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'ospf_list': []}]
+        ospf_options = dict(advertise_interface_vlan=10,
+                            area_id='1',
+                            area_type='STANDARD',
+                            authentication_key='12',
+                            authentication_type='MESSAGE_DIGEST',
+                            interface='LAN_HA',
+                            is_ipv4=True,
+                            key_id=12,
+                            cost=5,
+                            auto_calc_cost_enabled=True)
+        expected_option = ospf_options.copy()
+        # Remove fields that are not used in current conditions
+        del expected_option['advertise_interface_vlan']
+        del expected_option['cost']
+        self._test_create_ospf(members, ospf_options, [expected_option])
+
+    def test_create_ospf_simple(self):
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'ospf_list': []}]
+        ospf_options = dict(advertise_interface_vlan=10,
+                            area_id='1',
+                            area_type='STANDARD',
+                            authentication_key='12',
+                            authentication_type='SIMPLE',
+                            interface='LAN_HA',
+                            is_ipv4=True,
+                            key_id=12,
+                            cost=5,
+                            auto_calc_cost_enabled=False)
+        expected_option = ospf_options.copy()
+        # Remove fields that are not used in current conditions
+        del expected_option['advertise_interface_vlan']
+        del expected_option['key_id']
+        self._test_create_ospf(members, ospf_options, [expected_option])
 
     def test_create_ospf_with_existent_settings(self):
         members = [
