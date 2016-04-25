@@ -96,7 +96,8 @@ class InfobloxObjectManipulator(object):
             'interface': 'LOOPBACK'}
         if ':' in ip:
             anycast_loopback['ipv6_network_setting'] = {
-                'virtual_ip': ip}
+                'virtual_ip': ip,
+                'cidr_prefix': 128}
         else:
             anycast_loopback['ipv4_network_setting'] = {
                 'address': ip,
