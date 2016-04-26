@@ -171,17 +171,51 @@ class InfobloxObjectManipulator(object):
         self._update_infoblox_object('nsgroup', {'name': group_name},
                                      group)
 
+    @staticmethod
+    def _copy_fields_or_raise(source_dict, dest_dict, fields):
+        for field in fields:
+            if field not in source_dict:
+                raise ValueError(_("Field '{}' is required").format(field))
+            else:
+                dest_dict[field] = source_dict[field]
+
     def create_ospf(self, member_name, ospf_options_dict):
         """Add ospf settings to the grid member."""
+        required_fields = ('area_id', 'area_type', 'auto_calc_cost_enabled',
+                           'authentication_type', 'is_ipv4', 'interface')
+        optional_fields = ('comment', 'dead_interval', 'hello_interval',
+                           'interface', 'retransmit_interval',
+                           'transmit_delay')
+        opts = {}
+        self._copy_fields_or_raise(ospf_options_dict, opts, required_fields)
+
+        conditional_fields = []
+        # Process fields that become required depending on another field value
+        if opts['auto_calc_cost_enabled'] is False:
+            conditional_fields.append('cost')
+        if opts['interface'] == 'IP':
+            conditional_fields.append('advertise_interface_vlan')
+
+        if opts['authentication_type'] == 'MESSAGE_DIGEST':
+            conditional_fields.extend(['authentication_key', 'key_id'])
+        elif opts['authentication_type'] == 'SIMPLE':
+            conditional_fields.append('authentication_key')
+        self._copy_fields_or_raise(ospf_options_dict, opts, conditional_fields)
+
+        # Copy optional fields if value is set
+        for field in optional_fields:
+            if ospf_options_dict.get(field):
+                opts[field] = ospf_options_dict[field]
+
         member = self._get_infoblox_object_or_none(
             'member', {'host_name': member_name},
             return_fields=['ospf_list'])
 
-        # Should we raise some exception here or just log object not found?
         if not member:
             LOG.error(_("Grid Member %(name)s is not found"),
                       {'name': member_name})
-        ospf_list = member['ospf_list'] + [ospf_options_dict]
+            return
+        ospf_list = member['ospf_list'] + [opts]
         payload = {'ospf_list': ospf_list}
         self._update_infoblox_object_by_ref(member['_ref'], payload)
 
