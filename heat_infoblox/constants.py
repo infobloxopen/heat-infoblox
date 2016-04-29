@@ -17,6 +17,10 @@
 # Common constants
 
 CONNECTION = 'connection'
+HOST = 'host'
+API = 'api'
+API_VERSION = 'api_version'
+USE_SSL = 'use_ssl'
 URL = 'url'
 USERNAME = 'username'
 PASSWORD = 'password'

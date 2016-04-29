@@ -5,4 +5,4 @@
 pbr!=0.7,<1.0,>=0.6
 Babel>=1.3
 oslo.config<1.10.0,>=1.9.3 # Apache-2.0
-infoblox-netmri>=0.1.1
+infoblox-netmri>=0.1.3

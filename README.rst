@@ -2,56 +2,51 @@
 heat-infoblox
 ===============================
 
-OpenStack Heat resources for orchestrating Infoblox appliances.
-
-Enabling In DevStack
---------------------
-
-To enable use of Infoblox Heat resources in DevStack, add this repository as a
-plugin:
-
-     enable_plugin heat-infoblox https://github.com/infobloxopen/heat-infoblox.git
-     enable_service heat-infoblox
-
+OpenStack Heat resources for integration with Infoblox appliances.
 
 Features
 --------
 
-* Provides Infoblox::Grid::Member and Infoblox::Grid::NameServerGroupMember
-resources.
+This package enables the configuration of Infoblox DDI appliances, as well
+as the management of physical network resources via the Infoblox NetMRI
+product.
+
+With these resources you can:
+ * Add and remove members from an Infoblox Grid
+ * Add and remove grid members from a nameserver group
+ * Configure Anycast loopback addresses on grid members [coming soon]
+ * Configure OSPF and BGP protocols to advertise Anycast addresses [coming soon]
+ * Execute aribtrary jobs on the NetMRI
+ * Manage physical resources with a Heat resource that will execute different
+   create and delete jobs on the NetMRI when a resource is created and deleted.
+
+Installation
+------------
+
+You may install this module directly from PyPi.
 
 OpenStack Configuration
 -----------------------
 
-After installation of the package, you must configure the connection
-parameters for the WAPI.
+You must update the ``plugin_dirs`` parameter in the ``heat.conf`` file
+to include the resources from this module. Typically this would mean
+adding ``/usr/local/lib/python2.7/dist-packages/heat_infoblox``:
 
-In the ``heat.conf`` you must create an ``[infoblox]`` stanza with the
-following parameters.
+::
 
-*wapi_url* - the URL used to reach the WAPI. Minimum version supported is
-2.2.1. Example: ``https://172.16.98.66/wapi/v2.2.1/``.
-
-*username* - the username to authenticate to the WAPI service
-
-*password* - the password to authenticate to the WAPI service
-
-*sslverify* - if True, then the SSL certificate for the WAPI service will be
-validated
+  plugin_dirs = /usr/local/lib/python2.7/dist-packages/heat_infoblox,/usr/lib64/heat,/usr/lib/heat
 
 The Heat engine must be restarted after installation and configuration of the
 package.
 
-Note that storing these in the configuration file is not ideal and will change
-in a future build. In the configuration file, the GM must be available at the
-time of configuration, and therefore cannot simply be spun up as part of the
-stack. Additionally, it enables any Heat user to utilize the grid resources.
+Prior releases required configuration of connectivity parameters in the
+``heat.conf`` file. This is no longer necessary, and those parameters are no
+longer read. Instead, you include a ``connection`` map in the resource itself.
 
-Infoblox NIOS Configuration
----------------------------
+Infoblox Configuration
+----------------------
 
 No special configuration is necessary.
-
 
 Using the Heat Resources
 ------------------------
@@ -84,4 +79,27 @@ only after the Infoblox::Grid::Member has already been created.
 
 For test purposes when using the included templates, you can run the setup.sh
 script to create a nios use and tenant, and setup test networks.
+
+*Infoblox::NetMRI::Job*
+
+This resource executes an arbitrary job in the NetMRI upon creation. It does
+nothing upon deletion.
+
+*Infoblox::NetMRI::ManagedResource*
+
+This resource executes an arbitrary job in the NetMRI upon creation, and a
+different job upon deletion.
+
+
+Enabling In DevStack
+--------------------
+
+To enable use of Infoblox Heat resources in DevStack, add this repository as a
+plugin:
+
+::
+
+  enable_plugin heat-infoblox https://github.com/infobloxopen/heat-infoblox.git
+
+This will add the heat-infoblox module in development mode.
 

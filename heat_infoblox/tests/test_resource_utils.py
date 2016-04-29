@@ -17,7 +17,6 @@ import mock
 
 from heat.tests import common
 
-from heat_infoblox import config as cfg
 from heat_infoblox import connector
 from heat_infoblox import resource_utils
 

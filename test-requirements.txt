@@ -4,9 +4,10 @@
 
 # Hacking already pins down pep8, pyflakes and flake8
 hacking<0.11,>=0.10.0
+bandit>=0.10.1
 coverage>=3.6
 discover
--e git+https://git.openstack.org/openstack/heat.git@stable/kilo#egg=heat
+-e git+https://git.openstack.org/openstack/heat.git@master#egg=heat
 mock>=1.2
 mox>=0.5.3
 mox3>=0.7.0
@@ -16,4 +17,4 @@ paramiko>=1.13.0
 sphinx!=1.2.0,!=1.3b1,<1.3,>=1.1.2
 testrepository>=0.0.18
 testscenarios>=0.4
-testtools!=1.2.0,>=0.9.36
+testtools>=1.4.0
