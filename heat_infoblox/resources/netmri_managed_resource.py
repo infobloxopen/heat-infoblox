@@ -46,7 +46,9 @@ class NetMRIManagedResource(resource.Resource, mri.NetMRIResourceMixin):
     DELETE_JOB = 'delete_job'
     DELETE_JOB_ID = 'delete_job_id'
 
-    support_status = support.SupportStatus(support.UNSUPPORTED)
+    support_status = support.SupportStatus(
+        support.UNSUPPORTED,
+        _('See support.infoblox.com for support.'))
 
     properties_schema = {
         constants.CONNECTION:

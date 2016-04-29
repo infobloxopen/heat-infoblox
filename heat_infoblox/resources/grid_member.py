@@ -184,10 +184,10 @@ class GridMember(resource.Resource):
     attributes_schema = {
         USER_DATA: attributes.Schema(
             _('User data for the Nova boot process.'),
-            type=attributes.Schema.STRING),
+            attributes.Schema.STRING),
         NAME_ATTR: attributes.Schema(
             _('The member name.'),
-            type=attributes.Schema.STRING)
+            attributes.Schema.STRING)
     }
 
     def _make_network_settings(self, ip):
