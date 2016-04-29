@@ -183,9 +183,11 @@ class GridMember(resource.Resource):
 
     attributes_schema = {
         USER_DATA: attributes.Schema(
-            _('User data for the Nova boot process.')),
+            _('User data for the Nova boot process.'),
+            attributes.Schema.STRING),
         NAME_ATTR: attributes.Schema(
-            _('The member name.'))
+            _('The member name.'),
+            attributes.Schema.STRING)
     }
 
     def _make_network_settings(self, ip):
@@ -319,9 +321,9 @@ class GridMember(resource.Resource):
             user_data += 'gridmaster:\n'
             user_data += '  token: %s\n' % token[0]['token']
             user_data += '  ip_addr: %s\n' % self.properties[self.GM_IP]
-            user_data += '  certificate: %s\n' % self.properties[
+            user_data += '  certificate: |\n    %s\n' % self.properties[
                 self.GM_CERTIFICATE
-            ]
+            ].replace('\n', '\n    ')
 
         LOG.debug('user_data: %s' % user_data)
 

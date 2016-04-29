@@ -1,5 +1,4 @@
-# Copyright (c) 2015 Infoblox Inc.
-# All Rights Reserved.
+# Copyright (c) 2015 Infoblox Inc.  # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -99,7 +98,8 @@ class NameServerGroupMember(resource.Resource):
 
     attributes_schema = {
         NS_GROUP: attributes.Schema(
-            _('The name server group details.'))
+            _('The name server group details.'),
+            attributes.Schema.MAP)
     }
 
     def infoblox(self):
@@ -127,9 +127,8 @@ class NameServerGroupMember(resource.Resource):
             return_fields=['name', 'grid_primary', 'grid_secondaries']
         )
         if len(groups) == 0:
-            raise exception.NotFound(
-                'Name Server Group %s not found' % group_name
-            )
+            raise exception.EntityNotFound(entity='Name Server Group',
+                                           name=group_name)
         return groups[0]
 
     def handle_create(self):
