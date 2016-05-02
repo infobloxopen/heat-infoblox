@@ -72,66 +72,82 @@ class Ospf(resource.Resource):
             schema=properties.Schema(
                 properties.Schema.STRING
             ),
+            update_allowed=True,
             required=True),
         ADVERTISE_INTERFACE_VLAN: properties.Schema(
             properties.Schema.STRING,
             _('The VLAN used as the advertising interface '
-              'for sending OSPF announcements.')),
+              'for sending OSPF announcements.'),
+            update_allowed=True),
         AREA_ID: properties.Schema(
             properties.Schema.STRING,
             _('The area ID value of the OSPF settings.'),
+            update_allowed=True,
             required=True),
         AREA_TYPE: properties.Schema(
             properties.Schema.STRING,
             _('The OSPF area type.'),
+            update_allowed=True,
             constraints=[
                 constraints.AllowedValues(AREA_TYPES)
             ]),
         AUTHENTICATION_KEY: properties.Schema(
             properties.Schema.STRING,
-            _('The authentication password to use for OSPF.')),
+            _('The authentication password to use for OSPF.'),
+            update_allowed=True),
         AUTHENTICATION_TYPE: properties.Schema(
             properties.Schema.STRING,
             _('The authentication type used for the OSPF advertisement.'),
+            update_allowed=True,
             constraints=[
                 constraints.AllowedValues(AUTHENTICATION_TYPES)
             ]),
         AUTO_CALC_COST_ENABLED: properties.Schema(
             properties.Schema.BOOLEAN,
             _('Determines if auto calculate cost is enabled or not.'),
+            update_allowed=True,
             required=True),
         COMMENT: properties.Schema(
             properties.Schema.STRING,
-            _('A descriptive comment of the OSPF configuration.')),
+            _('A descriptive comment of the OSPF configuration.'),
+            update_allowed=True),
         COST: properties.Schema(
             properties.Schema.INTEGER,
-            _('The cost metric associated with the OSPF advertisement.')),
+            _('The cost metric associated with the OSPF advertisement.'),
+            update_allowed=True),
         DEAD_INTERVAL: properties.Schema(
             properties.Schema.INTEGER,
-            _('The dead interval value of OSPF (in seconds).')),
+            _('The dead interval value of OSPF (in seconds).'),
+            update_allowed=True),
         HELLO_INTERVAL: properties.Schema(
             properties.Schema.INTEGER,
-            _('The hello interval value of OSPF.')),
+            _('The hello interval value of OSPF.'),
+            update_allowed=True,),
         INTERFACE: properties.Schema(
             properties.Schema.STRING,
             _('The interface that sends out OSPF advertisement information.'),
+            update_allowed=True,
             constraints=[
                 constraints.AllowedValues(INTERFACES)
             ]),
         IS_IPV4: properties.Schema(
             properties.Schema.BOOLEAN,
             _('The OSPF protocol version. '),
+            update_allowed=True,
             required=True),
         KEY_ID: properties.Schema(
             properties.Schema.INTEGER,
             _('The hash key identifier to use for'
-              ' "MESSAGE_DIGEST" authentication.')),
+              ' "MESSAGE_DIGEST" authentication.'),
+            update_allowed=True),
         RETRANSMIT_INTERVAL: properties.Schema(
             properties.Schema.INTEGER,
-            _('The retransmit interval time of OSPF (in seconds).')),
+            _('The retransmit interval time of OSPF (in seconds).'),
+            update_allowed=True),
         TRANSMIT_DELAY: properties.Schema(
             properties.Schema.INTEGER,
-            _('The transmit delay value of OSPF (in seconds).')),
+            _('The transmit delay value of OSPF (in seconds).'),
+            update_allowed=True),
     }
 
     @property
@@ -148,6 +164,32 @@ class Ospf(resource.Resource):
             self.infoblox.create_ospf(member_name,
                                       ospf_options_dict)
         self.resource_id_set(self.properties[self.AREA_ID])
+
+    def handle_update(self, json_snippet, tmpl_diff, prop_diff):
+        if prop_diff:
+            new_members = set(tmpl_diff['Properties']['grid_members'])
+            if 'grid_members' in prop_diff:
+                old_members = set(self.properties.get('grid_members'))
+                to_remove = old_members - new_members
+                for member in to_remove:
+                    self.infoblox.delete_ospf(self.properties[self.AREA_ID],
+                                              member)
+
+                if len(prop_diff) > 1:
+                    # OSPF setting was changed, so need to update all members
+                    to_add = new_members
+                else:
+                    # OSPF setting is not changes, so it add to new members
+                    to_add = new_members - old_members
+            else:
+                # OSPF setting was changed, so need to update all members
+                to_add = new_members
+
+            for member in to_add:
+                self.infoblox.create_ospf(
+                    member,
+                    tmpl_diff['Properties'],
+                    old_area_id=self.properties[self.AREA_ID])
 
     def handle_delete(self):
         for member in self.properties[self.GRID_MEMBERS]:

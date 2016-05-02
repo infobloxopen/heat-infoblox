@@ -179,8 +179,11 @@ class InfobloxObjectManipulator(object):
             else:
                 dest_dict[field] = source_dict[field]
 
-    def create_ospf(self, member_name, ospf_options_dict):
-        """Add ospf settings to the grid member."""
+    def create_ospf(self, member_name, ospf_options_dict, old_area_id=None):
+        """Add ospf settings to the grid member.
+
+        If old_area_id is passed ospf settings are updated instead of creation
+        """
         required_fields = ('area_id', 'area_type', 'auto_calc_cost_enabled',
                            'authentication_type', 'is_ipv4', 'interface')
         optional_fields = ('comment', 'dead_interval', 'hello_interval',
@@ -215,7 +218,11 @@ class InfobloxObjectManipulator(object):
             LOG.error(_("Grid Member %(name)s is not found"),
                       {'name': member_name})
             return
-        ospf_list = member['ospf_list'] + [opts]
+        # Remove old area_id in case of update
+        ospf_list = [ospf for ospf in member['ospf_list']
+                     if (old_area_id is None or
+                         str(old_area_id) != ospf.get('area_id'))]
+        ospf_list.append(opts)
         payload = {'ospf_list': ospf_list}
         self._update_infoblox_object_by_ref(member['_ref'], payload)
 
