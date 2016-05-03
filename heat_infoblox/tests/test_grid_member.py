@@ -15,11 +15,9 @@
 
 import copy
 import mock
+import os
 
 from oslo_config import cfg
-
-cfg.CONF.import_opt('plugin_dirs', 'heat.common.config')
-cfg.CONF.set_override('plugin_dirs', '/opt/stack/heat-infoblox/heat_infoblox')
 
 from heat.engine import stack
 from heat.engine import template
@@ -44,9 +42,15 @@ grid_member_template = {
     }
 }
 
+DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+
 
 class GridMemberTest(common.HeatTestCase):
     def setUp(self):
+        heat_infoblox_path = os.path.abspath(os.path.join(
+            os.path.dirname(__file__), os.pardir))
+        cfg.CONF.import_opt('plugin_dirs', 'heat.common.config')
+        cfg.CONF.set_override('plugin_dirs', heat_infoblox_path)
         super(GridMemberTest, self).setUp()
 
         self.ctx = utils.dummy_context()
