@@ -1,0 +1,48 @@
+heat_template_version: 2014-10-16
+description: Template to configure BGP settings on existent Grid
+parameters:
+  grid_member:
+    type: string
+    description: Grid Member Name for BGP Neigbor configuration
+  authentication_mode:
+    type: string
+    description: >
+      Determines the BGP authentication mode.
+      ('MD5', 'NONE').
+    default: 'NONE'
+  bgp_neighbor_pass:
+    type: string
+    description: >
+      The password for a BGP neighbor. This is required only if
+      authentication_mode is set to "MD5".
+    default: ''
+  comment:
+    type: string
+    description: User comments for this BGP neighbor.
+    default: ''
+  interface:
+    type: string
+    description: >
+      The interface that sends BGP advertisement information.
+      ('LAN_HA')
+    default: 'LAN_HA'
+  neighbor_ip:
+    type: string
+    description: The IP address of the BGP neighbor.
+  remote_as:
+    type: number
+    description: The remote AS number of the BGP neighbor.
+    constraints:
+      - range: { min: 0, max: 65535 }
+resources:
+  bgp_neighbor:
+    type: Infoblox::Grid::BgpNeighbor
+    properties:
+      connection: { url: "https://10.40.240.113/wapi/v2.3/", username: admin, password: infoblox, sslverify: False }
+      grid_member: { get_param: grid_member }
+      authentication_mode: { get_param: authentication_mode }
+      bgp_neighbor_pass: { get_param: bgp_neighbor_pass }
+      comment: { get_param: comment }
+      interface: { get_param: interface }
+      neighbor_ip: { get_param: neighbor_ip }
+      remote_as: { get_param: remote_as }

@@ -244,6 +244,111 @@ class InfobloxObjectManipulator(object):
                 payload = {'ospf_list': new_ospf_list}
                 self._update_infoblox_object_by_ref(member['_ref'], payload)
 
+    def _get_member(self, member_name, return_fields, fail_if_no_member=False):
+        member = self._get_infoblox_object_or_none(
+            'member', {'host_name': member_name},
+            return_fields=return_fields)
+        if not member:
+            raise exc.InfobloxGridMemberNotFound(name=member_name)
+        return member
+
+    def create_bgp_as(self, member_name, bgp_opts, old_neighbor_ip=None):
+        """Configure BGP AS on grid member.
+
+        Creates or updates BGP Autonomous System configuration on grid member.
+        Additionally configures one BGP Neighbor. Adding BGP AS configuration
+        requires at least one Neighbor to be configured on member.
+        """
+        bgp_fields = ('as', 'holddown', 'keepalive', 'link_detect')
+        neighbor_fields = ('authentication_mode', 'bgp_neighbor_pass',
+                           'comment', 'interface', 'neighbor_ip', 'remote_as')
+
+        member = self._get_member(member_name, ['bgp_as'],
+                                  fail_if_no_member=True)
+        bgp_as_from_member = member.get('bgp_as') or []
+        bgp_as = {field: bgp_opts[field] for field in bgp_fields
+                  if bgp_opts.get(field) is not None}
+        new_neighbor = {field: bgp_opts[field]
+                        for field in neighbor_fields
+                        if bgp_opts.get(field) is not None}
+
+        # If old_neighbor_ip is defined then we are doing update.
+        # Original neighbors are preserved, but old_neighbor_ip has to be
+        # removed from this list, since this neighbor is regenerated as
+        # new_neighbor.
+        neighbors = []
+        if old_neighbor_ip and bgp_as_from_member:
+            neighbors = [neighbor
+                         for neighbor in bgp_as_from_member[0]['neighbors']
+                         if str(old_neighbor_ip) != neighbor['neighbor_ip']]
+        neighbors.append(new_neighbor)
+
+        if len(bgp_as_from_member) > 0:
+            bgp_as_from_member[0].update(bgp_as)
+        else:
+            bgp_as_from_member.append(bgp_as)
+        bgp_as_from_member[0]['neighbors'] = neighbors
+
+        payload = {'bgp_as': bgp_as_from_member}
+        self._update_infoblox_object_by_ref(member['_ref'], payload)
+
+    def delete_bgp_as(self, member_name):
+        """Delete BGP AS from grid member."""
+        member = self._get_member(member_name, ['bgp_as'])
+
+        if member:
+            payload = {'bgp_as': []}
+            self._update_infoblox_object_by_ref(member['_ref'], payload)
+
+    def create_bgp_neighbor(self, member_name, bgp_neighbor_opts,
+                            old_neighbor_ip=None):
+        """Configure BGP neighbor on grid member.
+
+        Adds new BGP neighbor to existent BGP neighbor list. Updates neighbor
+        if 'old_neighbor_ip' is specified.
+        """
+        neighbor_fields = ('authentication_mode', 'bgp_neighbor_pass',
+                           'comment', 'interface', 'neighbor_ip', 'remote_as')
+
+        member = self._get_member(member_name, ['bgp_as'],
+                                  fail_if_no_member=True)
+
+        bgp_as_from_member = member.get('bgp_as')
+        if not bgp_as_from_member:
+            raise exc.InfobloxBgpAsNotConfigured(name=member_name)
+
+        new_neighbor = {field: bgp_neighbor_opts[field]
+                        for field in neighbor_fields
+                        if bgp_neighbor_opts.get(field) is not None}
+
+        # Remove old neighbor from neighbors list in case of update
+        neighbors = [neighbor
+                     for neighbor in bgp_as_from_member[0]['neighbors']
+                     if (old_neighbor_ip is None or
+                         str(old_neighbor_ip) != neighbor['neighbor_ip'])]
+        neighbors.append(new_neighbor)
+
+        bgp_as_from_member[0]['neighbors'] = neighbors
+        payload = {'bgp_as': bgp_as_from_member}
+        self._update_infoblox_object_by_ref(member['_ref'], payload)
+
+    def delete_bgp_neighbor(self, member_name, neighbor_ip):
+        """Delete BGP neighbor from grid member."""
+        member = self._get_member(member_name, ['bgp_as'])
+
+        if member and member['bgp_as']:
+            neighbors = []
+            update_member = False
+            for neighbor in member['bgp_as'][0]['neighbors']:
+                if str(neighbor_ip) == neighbor['neighbor_ip']:
+                    update_member = True
+                else:
+                    neighbors.append(neighbor)
+            if update_member:
+                member['bgp_as'][0]['neighbors'] = neighbors
+                payload = {'bgp_as': member['bgp_as']}
+                self._update_infoblox_object_by_ref(member['_ref'], payload)
+
     def create_dns_view(self, net_view_name, dns_view_name):
         dns_view_data = {'name': dns_view_name,
                          'network_view': net_view_name}
