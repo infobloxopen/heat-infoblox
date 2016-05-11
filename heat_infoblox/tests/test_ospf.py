@@ -102,3 +102,25 @@ class OspfTest(common.HeatTestCase):
         self.ospf.handle_delete()
         self.ospf.infoblox_object.delete_ospf.assert_called_with('1',
                                                                  'my_member1')
+
+    def test_handle_update(self):
+        self.set_stack(my_template)
+        self.ospf.handle_create()
+        props = my_template['resources']['ospf']['properties'].copy()
+        props['area_id'] = '2'
+        props['grid_members'] = ['member_name2', 'member_name3']
+        tmpl_diff = {'Properties': props}
+        prop_diff = {'area_id': props['area_id'],
+                     'grid_members': props['grid_members']}
+        self.ospf.handle_update(None, tmpl_diff, prop_diff)
+        self.ospf.infoblox_object.delete_ospf.assert_called_with(
+            '1', 'member_name1')
+
+        opts = my_template['resources']['ospf']['properties'].copy()
+        opts['cost'] = None
+        calls = [mock.call('member_name1', opts),
+                 mock.call('member_name2', opts),
+                 mock.call('member_name2', props, old_area_id='1'),
+                 mock.call('member_name3', props, old_area_id='1')]
+        self.ospf.infoblox_object.create_ospf.assert_has_calls(calls,
+                                                               any_order=True)
