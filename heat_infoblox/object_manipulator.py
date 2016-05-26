@@ -87,6 +87,27 @@ class InfobloxObjectManipulator(object):
         member_data = {'host_name': member_name}
         self._delete_infoblox_object('member', member_data)
 
+    def add_member_dns_additional_ip(self, member_name, ip):
+        return_fields = ['additional_ip_list']
+        member_dns = self._get_member(member_name, return_fields,
+                                      fail_if_no_member=True,
+                                      object_type='member:dns')
+        additional_ips = member_dns.get('additional_ip_list') or []
+        additional_ips.append(ip)
+        payload = {'additional_ip_list': additional_ips}
+        self._update_infoblox_object_by_ref(member_dns['_ref'], payload)
+
+    def remove_member_dns_additional_ip(self, member_name, ip):
+        return_fields = ['additional_ip_list']
+        member_dns = self._get_member(member_name, return_fields,
+                                      object_type='member:dns')
+        if not member_dns or not member_dns.get('additional_ip_list'):
+            return
+        updated_ips = [orig_ip for orig_ip in member_dns['additional_ip_list']
+                       if orig_ip != str(ip)]
+        payload = {'additional_ip_list': updated_ips}
+        self._update_infoblox_object_by_ref(member_dns['_ref'], payload)
+
     def create_anycast_loopback(self, member_name, ip, enable_bgp=False,
                                 enable_ospf=False):
         anycast_loopback = {
@@ -244,11 +265,12 @@ class InfobloxObjectManipulator(object):
                 payload = {'ospf_list': new_ospf_list}
                 self._update_infoblox_object_by_ref(member['_ref'], payload)
 
-    def _get_member(self, member_name, return_fields, fail_if_no_member=False):
+    def _get_member(self, member_name, return_fields, fail_if_no_member=False,
+                    object_type='member'):
         member = self._get_infoblox_object_or_none(
-            'member', {'host_name': member_name},
+            object_type, {'host_name': member_name},
             return_fields=return_fields)
-        if not member:
+        if fail_if_no_member and not member:
             raise exc.InfobloxGridMemberNotFound(name=member_name)
         return member
 

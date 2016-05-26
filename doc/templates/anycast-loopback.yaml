@@ -15,6 +15,11 @@ parameters:
     type: boolean
     description: Determines if the OSPF advertisement setting is enabled for this interface or not.
     default: False
+  enable_dns:
+    type: boolean
+    description: Determines if the Anycast IP will be used to serve DNS.
+    default: False
+
 resources:
   anycast:
     type: Infoblox::Grid::AnycastLoopback
@@ -24,3 +29,4 @@ resources:
       grid_members: { get_param: grid_members }
       enable_bgp: { get_param: enable_bgp }
       enable_ospf: { get_param: enable_ospf }
+      enable_dns: { get_param: enable_dns }

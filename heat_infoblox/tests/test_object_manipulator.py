@@ -167,8 +167,8 @@ class TestObjectManipulator(testtools.TestCase):
                           dest,
                           fields)
 
-    def _test_configuration_update(self, method_name, field, members,
-                                   create_options, expected_options,
+    def _test_configuration_update(self, method_name, object_type, field,
+                                   members, create_options, expected_options,
                                    **kwargs):
         member_name = 'my_member'
 
@@ -179,13 +179,13 @@ class TestObjectManipulator(testtools.TestCase):
         method_to_call(member_name, create_options)
 
         connector.get_object.assert_called_once_with(
-            'member', {'host_name': member_name},
+            object_type, {'host_name': member_name},
             [field], extattrs=None)
         connector.update_object.assert_called_once_with(
             members[0]['_ref'], {field: expected_options})
 
     def _test_create_ospf(self, members, ospf_options, expected_options):
-        self._test_configuration_update('create_ospf', 'ospf_list',
+        self._test_configuration_update('create_ospf', 'member', 'ospf_list',
                                         members, ospf_options,
                                         expected_options)
 
@@ -315,13 +315,14 @@ class TestObjectManipulator(testtools.TestCase):
         self._test_delete_ospf(members, expected_options)
 
     def _test_bgp_as(self, members, bgp_options, expected_options, **kwargs):
-        self._test_configuration_update('create_bgp_as', 'bgp_as',
+        self._test_configuration_update('create_bgp_as', 'member', 'bgp_as',
                                         members, bgp_options, expected_options,
                                         **kwargs)
 
     def _test_bgp_neighbor(self, members, bgp_options, expected_options):
-        self._test_configuration_update('create_bgp_neighbor', 'bgp_as',
-                                        members, bgp_options, expected_options)
+        self._test_configuration_update('create_bgp_neighbor', 'member',
+                                        'bgp_as', members, bgp_options,
+                                        expected_options)
 
     def test_create_bgp_as(self):
         members = [
@@ -555,3 +556,49 @@ class TestObjectManipulator(testtools.TestCase):
                                              'remote_as': 15,
                                              }]}]}
         self._test_delete_bgp(members, neighbor_ip, expected_options)
+
+    def _test_additional_ip_list(self, members, server_ip_list,
+                                 expected_ip_list):
+        self._test_configuration_update('add_member_dns_additional_ip',
+                                        'member:dns', 'additional_ip_list',
+                                        members, server_ip_list,
+                                        expected_ip_list)
+
+    def test_add_member_dns_additional_ip(self):
+        anycast_ip = '192.168.1.15'
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'additional_ip_list': []}]
+        expected_options = [anycast_ip]
+        self._test_additional_ip_list(members, anycast_ip, expected_options)
+
+    def test_add_member_dns_additional_ip_existent_ips(self):
+        anycast_ip = '192.168.1.15'
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'additional_ip_list': ['172.23.23.13']}]
+        expected_options = ['172.23.23.13', anycast_ip]
+        self._test_additional_ip_list(members, anycast_ip, expected_options)
+
+    def _test_remove_ip_list(self, members, server_ip_list,
+                             expected_ip_list):
+        self._test_configuration_update('remove_member_dns_additional_ip',
+                                        'member:dns', 'additional_ip_list',
+                                        members, server_ip_list,
+                                        expected_ip_list)
+
+    def test_remove_member_dns_additional_ip(self):
+        anycast_ip = '192.168.1.15'
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'additional_ip_list': [anycast_ip]}]
+        expected_options = []
+        self._test_remove_ip_list(members, anycast_ip, expected_options)
+
+    def test_remove_member_dns_additional_ip_multiple_ips(self):
+        anycast_ip = '192.168.1.15'
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'additional_ip_list': ['14.53.23.3', anycast_ip]}]
+        expected_options = ['14.53.23.3']
+        self._test_remove_ip_list(members, anycast_ip, expected_options)
