@@ -103,6 +103,7 @@ class NetMRIManagedResource(resource.Resource, mri.NetMRIResourceMixin):
     def _resolve_attribute(self, name):
         return self._resolve_job_attribute(name)
 
+
 def resource_mapping():
     return {
         'Infoblox::NetMRI::ManagedResource': NetMRIManagedResource,
