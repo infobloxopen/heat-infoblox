@@ -197,7 +197,7 @@ class GridMember(resource.Resource):
             'address': ip['ip_address'],
             'subnet_mask': str(ipnet.netmask),
             'gateway': subnet['gateway_ip']
-        }
+        }, subnet
 
     def _make_ipv6_settings(self, ip):
         subnet = self.client('neutron').show_subnet(ip['subnet_id'])['subnet']
@@ -208,7 +208,7 @@ class GridMember(resource.Resource):
             'cidr_prefix': int(prefix.prefixlen),
             'gateway': subnet['gateway_ip'], 'enabled': True,
             'auto_router_config_enabled': autocfg
-        }
+        }, subnet
 
     def infoblox(self):
         if not getattr(self, 'infoblox_object', None):
@@ -216,7 +216,7 @@ class GridMember(resource.Resource):
             self.infoblox_object = resource_utils.connect_to_infoblox(conn)
         return self.infoblox_object
 
-    def _make_port_network_settings(self, port_name):
+    def _make_port_network_settings(self, port_name, return_subnets=False):
         if self.properties[port_name] is None:
             return None
 
@@ -228,13 +228,19 @@ class GridMember(resource.Resource):
 
         ipv4 = None
         ipv6 = None
+        ipv4_subnet = None
+        ipv6_subnet = None
         for ip in port['fixed_ips']:
             if ':' in ip['ip_address'] and ipv6 is None:
-                ipv6 = self._make_ipv6_settings(ip)
+                ipv6, ipv6_subnet = self._make_ipv6_settings(ip)
             else:
                 if ipv4 is None:
-                    ipv4 = self._make_network_settings(ip)
-        return {'ipv4': ipv4, 'ipv6': ipv6}
+                    ipv4, ipv4_subnet = self._make_network_settings(ip)
+        result = {'ipv4': ipv4, 'ipv6': ipv6}
+        if return_subnets:
+            result['ipv4_subnet'] = ipv4_subnet
+            result['ipv6_subnet'] = ipv6_subnet
+        return result
 
     def handle_create(self):
         mgmt = self._make_port_network_settings(self.MGMT_PORT)
@@ -283,6 +289,17 @@ class GridMember(resource.Resource):
             self._remove_from_all_ns_groups()
             self.infoblox().delete_member(self.resource_id)
 
+    def _get_dhcp_status_for_port(self, port_settings):
+        status = {'ipv4': False,
+                  'ipv6': False}
+
+        if port_settings['ipv4'] and port_settings['ipv4_subnet']:
+            status['ipv4'] = port_settings['ipv4_subnet']['enable_dhcp']
+
+        if port_settings['ipv6'] and port_settings['ipv6_subnet']:
+            status['ipv6'] = port_settings['ipv6_subnet']['enable_dhcp']
+        return status
+
     def _make_user_data(self, member, token):
         user_data = '#infoblox-config\n\n'
 
@@ -300,18 +317,26 @@ class GridMember(resource.Resource):
 
         vip = member.get('vip_setting', None)
         ipv6 = member.get('ipv6_setting', None)
+
         if ipv6 and not ipv6.get('enabled', False):
             ipv6 = None
 
-        if vip or ipv6:
+        lan1 = self._make_port_network_settings(self.LAN1_PORT,
+                                                return_subnets=True)
+        dhcp_status = self._get_dhcp_status_for_port(lan1)
+        # Do not generate userdata for port if dhcp is enabled in subnet
+        need_vip = vip and not dhcp_status.get('ipv4')
+        need_ipv6 = ipv6 and not dhcp_status.get('ipv6')
+
+        if need_vip or need_ipv6:
             user_data += 'lan1:\n'
 
-        if vip:
+        if need_vip:
             user_data += '  v4_addr: %s\n' % vip['address']
             user_data += '  v4_netmask: %s\n' % vip['subnet_mask']
             user_data += '  v4_gw: %s\n' % vip['gateway']
 
-        if ipv6:
+        if need_ipv6:
             user_data += '  v6_addr: %s\n' % ipv6['virtual_ip']
             user_data += '  v6_cidr: %s\n' % ipv6['cidr_prefix']
             if not ipv6['auto_router_config_enabled']:

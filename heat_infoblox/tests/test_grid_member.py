@@ -90,6 +90,7 @@ class GridMemberTest(common.HeatTestCase):
             template.Template(stack_template)
         )
         self.my_member = self.stack['my_member']
+        self.my_member.client = mock.MagicMock()
         self.my_member.infoblox_object = mock.MagicMock()
         self.my_member._get_member_tokens = mock.MagicMock()
 
@@ -108,7 +109,6 @@ class GridMemberTest(common.HeatTestCase):
         props = tmpl['resources']['my_member']['properties']
         props[interface] = interface
         self.set_stack(tmpl)
-        self.my_member.client = mock.MagicMock()
         self.my_member.infoblox_object.create_member = mock.MagicMock()
         return tmpl
 
@@ -178,6 +178,39 @@ class GridMemberTest(common.HeatTestCase):
             '  v4_addr: 1.1.1.2\n'
             '  v4_netmask: 255.255.255.0\n'
             '  v4_gw: 1.1.1.1\n'
+            'gridmaster:\n'
+            '  token: abcdefg\n'
+            '  ip_addr: 10.1.1.2\n'
+            '  certificate: |\n    testing\n',
+            ud
+        )
+
+    def test_user_data_lan1_ipv4_dhcp_disabled(self):
+        dhcp_status = mock.Mock(return_value={'ipv4': False, 'ipv6': True})
+        self.set_member(self.ipv4_member)
+        self.set_token(['abcdefg', 'hijklmnop'])
+        self.my_member._get_dhcp_status_for_port = dhcp_status
+        ud = self.my_member._resolve_attribute('user_data')
+        self.assertEqual(
+            '#infoblox-config\n\nlan1:\n'
+            '  v4_addr: 1.1.1.2\n'
+            '  v4_netmask: 255.255.255.0\n'
+            '  v4_gw: 1.1.1.1\n'
+            'gridmaster:\n'
+            '  token: abcdefg\n'
+            '  ip_addr: 10.1.1.2\n'
+            '  certificate: |\n    testing\n',
+            ud
+        )
+
+    def test_user_data_lan1_ipv4_dhcp_enabled(self):
+        dhcp_status = mock.Mock(return_value={'ipv4': True, 'ipv6': True})
+        self.set_member(self.ipv4_member)
+        self.set_token(['abcdefg', 'hijklmnop'])
+        self.my_member._get_dhcp_status_for_port = dhcp_status
+        ud = self.my_member._resolve_attribute('user_data')
+        self.assertEqual(
+            '#infoblox-config\n\n'
             'gridmaster:\n'
             '  token: abcdefg\n'
             '  ip_addr: 10.1.1.2\n'
@@ -312,7 +345,7 @@ class GridMemberTest(common.HeatTestCase):
         self.my_member.client = mock.Mock()
         self.my_member.client.return_value = mock.Mock(**attrs)
 
-    def _make_port_subnet(self, ip, gw, cidr, v6mode=None):
+    def _make_port_subnet(self, ip, gw, cidr, v6mode=None, enable_dhcp=False):
         port = {
             'port': {
                 'fixed_ips': [
@@ -320,7 +353,8 @@ class GridMemberTest(common.HeatTestCase):
                 ]
             }
         }
-        subnet = {'subnet': {'cidr': cidr, 'gateway_ip': gw}}
+        subnet = {'subnet': {'cidr': cidr, 'gateway_ip': gw,
+                             'enable_dhcp': enable_dhcp}}
         if v6mode is not None:
             subnet['subnet']['ipv6_ra_mode'] = v6mode
 
@@ -354,6 +388,49 @@ class GridMemberTest(common.HeatTestCase):
                 'enabled': True, 'gateway': '1::10', 'virtual_ip': '1::4'}
         expected = {'ipv4': None, 'ipv6': ipv6}
         self.assertEqual(expected, settings)
+
+    def test_make_network_settings_and_dhcp_status(self):
+        port, subnet = self._make_port_subnet('1.2.3.4', '1.2.3.10',
+                                              '1.2.3.0/25', enable_dhcp=True)
+        self.set_net_info(port, subnet)
+        settings = self.my_member._make_port_network_settings(
+            'LAN1', return_subnets=True)
+        expected = {'ipv4': {'address': '1.2.3.4', 'gateway': '1.2.3.10',
+                             'subnet_mask': '255.255.255.128'},
+                    'ipv6': None,
+                    'ipv4_subnet': subnet['subnet'],
+                    'ipv6_subnet': None}
+        self.assertEqual(expected, settings)
+        expected_dhcp_status = {'ipv4': True, 'ipv6': False}
+        dhcp_status = self.my_member._get_dhcp_status_for_port(settings)
+        self.assertEqual(expected_dhcp_status, dhcp_status)
+
+    def test__get_dhcp_status_for_port(self):
+        input_data = (
+            {'ipv4': {'address': '1.2.3.4'},
+             'ipv6': None,
+             'ipv4_subnet': {'cidr': '1.2.3..0/24', 'enable_dhcp': True},
+             'ipv6_subnet': None},
+            {'ipv4': {'address': '1.2.3.4'},
+             'ipv6': {'cidr_prefix': 64, 'virtual_ip': '1::4'},
+             'ipv4_subnet': {'cidr': '1.2.3.0/24', 'enable_dhcp': True},
+             'ipv6_subnet': {'cidr': '1::/64', 'enable_dhcp': True}},
+            {'ipv4': {'address': '1.2.3.4'},
+             'ipv6': {'cidr_prefix': 64, 'virtual_ip': '1::4'},
+             'ipv4_subnet': {'cidr': '1.2.3.0/24', 'enable_dhcp': False},
+             'ipv6_subnet': {'cidr': '1::/64', 'enable_dhcp': False}},
+            {'ipv4': None,
+             'ipv6': {'cidr_prefix': 64, 'virtual_ip': '1::4'},
+             'ipv4_subnet': None,
+             'ipv6_subnet': {'cidr': '1::/64', 'enable_dhcp': True}},
+        )
+        output_data = ({'ipv4': True, 'ipv6': False},
+                       {'ipv4': True, 'ipv6': True},
+                       {'ipv4': False, 'ipv6': False},
+                       {'ipv4': False, 'ipv6': True},)
+        for (input, output) in zip(input_data, output_data):
+            self.assertEqual(output,
+                             self.my_member._get_dhcp_status_for_port(input))
 
     def test_remove_from_all_ns_groups(self):
         groups = [
