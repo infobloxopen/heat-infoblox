@@ -1,0 +1,196 @@
+heat_template_version: 2013-05-23
+description: Launches an HA pair GM, and configures the Neutron ports such that VRRP will work with IPv4 and virtual router ID 200. You must still manually configure HA on the grid.
+parameters:
+  name:
+    type: string
+    description: the name for the member
+    default: gm
+  node1_name:
+    type: string
+    description: the name for node 1
+    default: gm-node-1
+  node2_name:
+    type: string
+    description: the name for node 2
+    default: gm-node-2
+  external_network:
+    type: string
+    description: the external network for floating IP allocations
+    default: public-138-net
+    constraints:
+      - custom_constraint: neutron.network
+  temp_license:
+    type: string
+    description: comma-delimited list of temp licenses
+    default: vnios,enterprise,dns,dhcp,rpz,cloud
+  mgmt_network:
+    type: string
+    description: the management network
+    default: mgmt-net
+    constraints:
+      - custom_constraint: neutron.network
+  lan1_network:
+    type: string
+    description: the protocol network (must have a /24 network for auto addressing to work)
+    default: protocol-net
+    constraints:
+      - custom_constraint: neutron.network
+  security_group:
+    type: string
+    description: the security group to use
+    default: Infoblox
+  image:
+    type: string
+    description: NIOS image to use
+    default: nios-7.3.0-314102-160G-1420
+    constraints:
+      - custom_constraint: glance.image
+  flavor:
+    type: string
+    description: NIOS flavor to use (must match image)
+    default: vnios-1420.160
+    constraints:
+      - custom_constraint: nova.flavor
+  virtual_router_id:
+    type: number
+    default: 200
+resources:
+  vip_port:
+    type: OS::Neutron::Port
+    properties:
+      network: {get_param: lan1_network}
+      security_groups: [{get_param: security_group}]
+
+  lan1_port_node_1:
+    type: OS::Neutron::Port
+    properties:
+      network: {get_param: lan1_network}
+      security_groups: [{get_param: security_group}]
+
+  # NOTE: Virtual Router ID MUST be set to 200 in the GUI for this to work
+  # Also only supports IPv4 at this time.
+
+  ha_port_node_1:
+    type: OS::Neutron::Port
+    depends_on: [vip_port]
+    properties:
+      network: {get_param: lan1_network}
+      security_groups: [{get_param: security_group}]
+
+  lan1_port_node_2:
+    type: OS::Neutron::Port
+    properties:
+      network: {get_param: lan1_network}
+      security_groups: [{get_param: security_group}]
+
+  ha_port_node_2:
+    type: OS::Neutron::Port
+    depends_on: [vip_port]
+    properties:
+      network: {get_param: lan1_network}
+      security_groups: [{get_param: security_group}]
+
+  vip_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: {get_param: external_network}
+      port_id: {get_resource: vip_port}
+
+  node_1_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: {get_param: external_network}
+      port_id: {get_resource: lan1_port_node_1}
+
+  node_2_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: {get_param: external_network}
+      port_id: {get_resource: lan1_port_node_2}
+
+  node_1:
+    type: OS::Nova::Server
+    depends_on: [lan1_port_node_1]
+    properties:
+      name: {get_param: node1_name}
+      flavor: {get_param: flavor}
+      image: {get_param: image}
+      networks: [{network: {get_param: mgmt_network}}, {port: {get_resource: lan1_port_node_1}}, {port: {get_resource: ha_port_node_1}}]
+      config_drive: true
+      user_data_format: RAW
+      user_data:
+        str_replace:
+          template: |
+            #infoblox-config
+            
+            temp_license: $temp_license
+            remote_console_enabled: true
+            default_admin_password: infoblox
+            lan1:
+              v4_addr: $v4_addr
+              v4_netmask: 255.255.255.0
+              v4_gw: $v4_gw
+          params:
+            $temp_license: { get_param: temp_license }
+            $v4_addr: { get_attr: [lan1_port_node_1, fixed_ips, 0, ip_address] }
+            $v4_gw: { get_attr: [lan1_port_node_1, subnets, 0, gateway_ip] }
+
+  node_2:
+    type: OS::Nova::Server
+    depends_on: [lan1_port_node_2]
+    properties:
+      name: {get_param: node2_name}
+      flavor: {get_param: flavor}
+      image: {get_param: image}
+      networks: [{network: {get_param: mgmt_network}}, {port: {get_resource: lan1_port_node_2}}, {port: {get_resource: ha_port_node_2}}]
+      config_drive: true
+      user_data_format: RAW
+      user_data:
+        str_replace:
+          template: |
+            #infoblox-config
+            
+            temp_license: $temp_license
+            remote_console_enabled: true
+            default_admin_password: infoblox
+            lan1:
+              v4_addr: $v4_addr
+              v4_netmask: 255.255.255.0
+              v4_gw: $v4_gw
+          params:
+            $temp_license: { get_param: temp_license }
+            $v4_addr: { get_attr: [lan1_port_node_2, fixed_ips, 0, ip_address] }
+            $v4_gw: { get_attr: [lan1_port_node_2, subnets, 0, gateway_ip] }
+  ha_pair:
+    type: Infoblox::Grid::HaPair
+    depends_on: [node_1, node_2]
+    properties:
+      name: 'HaPair1'
+      vip: { get_resource: vip_port }
+      node1_ha: { get_resource: ha_port_node_1 }
+      node2_ha: { get_resource: ha_port_node_2 }
+      node1_lan1: { get_resource: lan1_port_node_1 }
+      node2_lan1: { get_resource: lan1_port_node_2 }
+      vip_floating_ip: { get_attr: [vip_floating_ip, floating_ip_address] }
+      node1_floating_ip: { get_attr: [node_1_floating_ip, floating_ip_address] }
+      node2_floating_ip: { get_attr: [node_2_floating_ip, floating_ip_address] }
+      virtual_router_id: { get_param: virtual_router_id }
+outputs:
+  node1_lan1_ip:
+    description: The LAN1 IP address of node 1.
+    value: { get_attr: [lan1_port_node_1, fixed_ips, 0, ip_address] }
+  node2_lan1_ip:
+    description: The LAN1 IP address of node 2.
+    value: { get_attr: [lan1_port_node_2, fixed_ips, 0, ip_address] }
+  vip:
+    description: The VIP
+    value: { get_attr: [vip_port, fixed_ips, 0, ip_address] }
+  vip_floating_ip:
+    description: The publically accessible floating IP for the VIP.
+    value: { get_attr: [vip_floating_ip, floating_ip_address] }
+  node_1_floating_ip:
+    description: The publically accessible floating IP for the Node 1 LAN1 IP
+    value: { get_attr: [node_1_floating_ip, floating_ip_address] }
+  node_2_floating_ip:
+    description: The publically accessible floating IP for the Node 2 LAN1 IP
+    value: { get_attr: [node_2_floating_ip, floating_ip_address] }
