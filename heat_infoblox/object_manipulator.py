@@ -18,6 +18,7 @@ import gettext
 import logging
 
 from heat_infoblox import ibexceptions as exc
+from heat_infoblox import resource_utils
 
 _ = gettext.gettext
 
@@ -37,24 +38,89 @@ class InfobloxObjectManipulator(object):
         )
 
     def create_member(self, name=None, platform='VNIOS',
-                      mgmt=None, lan1={}, lan2=None,
-                      nat_ip=None):
+                      config_addr_type='IPV4', vip=None, mgmt=None, lan2=None,
+                      nat_ip=None,
+                      ha_pair=False, use_v4_vrrp=True, vrid=None,
+                      node1_ha=None, node2_ha=None,
+                      node1_lan1=None, node2_lan1=None,
+                      node2_mgmt=None, node2_lan2=None, lan2_vrid=None):
         member_data = {'host_name': name, 'platform': platform}
         extra_data = {}
 
-        if lan1.get('ipv4', None):
-            extra_data['vip_setting'] = lan1['ipv4']
-        if lan1.get('ipv6', None):
-            extra_data['ipv6_setting'] = lan1['ipv6']
+        if ha_pair:
+            # For HA pair we use IPv4 or IPv6 address, not both
+            node1 = {}
+            node2 = {}
+            if config_addr_type == 'IPV6':
+                ipv4 = False
+            elif config_addr_type == 'BOTH':
+                ipv4 = use_v4_vrrp
+            else:  # default configuration is 'IPV4'
+                ipv4 = True
+            node1['ha_ip_address'] = resource_utils.get_ip_address(
+                node1_ha, ipv4, 'node1_ha')
+            node1['mgmt_lan'] = resource_utils.get_ip_address(
+                node1_lan1, ipv4, 'node1_lan1')
+            node2['ha_ip_address'] = resource_utils.get_ip_address(
+                node2_ha, ipv4, 'node2_ha')
+            node2['mgmt_lan'] = resource_utils.get_ip_address(
+                node2_lan1, ipv4, 'node2_lan1')
+            extra_data = {
+                'enable_ha': True,
+                'router_id': vrid,
+                'node_info': [
+                    {'lan_ha_port_setting': node1},
+                    {'lan_ha_port_setting': node2}
+                    ]
+                }
+
+        if config_addr_type in ('IPV4', 'BOTH'):
+            # Check that IPv4 address available
+            resource_utils.get_ip_address(vip, True, 'vip')
+            # Copy IPv4 address settings
+            extra_data['vip_setting'] = vip['ipv4'].copy()
+        if config_addr_type in ('IPV6', 'BOTH'):
+            # Check that IPv6 address available
+            resource_utils.get_ip_address(vip, False, 'vip')
+            # Copy IPv6 address settings
+            extra_data['ipv6_setting'] = vip['ipv6'].copy()
         if nat_ip:
             extra_data['nat_setting'] = {
                 'enabled': True,
                 'external_virtual_ip': nat_ip
             }
 
-        if mgmt and mgmt.get('ipv4', None):
-            extra_data['node_info'] = [{"mgmt_network_setting": mgmt['ipv4']}]
-            extra_data['mgmt_port_setting'] = {"enabled": True}
+        if mgmt:
+            if config_addr_type in ('IPV4', 'BOTH'):
+                # Check that MGMT IPv4 address available
+                resource_utils.get_ip_address(mgmt, True, 'MGMT')
+                extra_data['mgmt_port_setting'] = {"enabled": True}
+                if ha_pair:
+                    # Check that node2 MGMT IPv4 address available
+                    resource_utils.get_ip_address(node2_mgmt, True,
+                                                  'node2_MGMT')
+                    extra_data['node_info'][0] = {
+                        'mgmt_network_setting': mgmt['ipv4']}
+                    extra_data['node_info'][1] = {
+                        'mgmt_network_setting': node2_mgmt['ipv4']}
+                else:
+                    extra_data['node_info'] = [
+                        {'mgmt_network_setting': mgmt['ipv4']}]
+            if config_addr_type in ('IPV6', 'BOTH'):
+                # Check that IPv6 address available
+                resource_utils.get_ip_address(mgmt, False, 'MGMT')
+                extra_data['v6_mgmt_network_setting'] = {"enabled": True}
+                if ha_pair:
+                    # Check that node2 MGMT IPv4 address available
+                    resource_utils.get_ip_address(node2_mgmt, True,
+                                                  'node2_MGMT')
+                    extra_data['node_info'][0] = {
+                        'v6_mgmt_network_setting': mgmt['ipv4']}
+                    extra_data['node_info'][1] = {
+                        'v6_mgmt_network_setting': node2_mgmt['ipv4']}
+                else:
+                    extra_data['node_info'] = [
+                        {'v6_mgmt_network_setting': mgmt['ipv4']}]
 
         if lan2 and lan2.get('ipv4', None):
             extra_data['lan2_enabled'] = True
@@ -62,16 +128,21 @@ class InfobloxObjectManipulator(object):
                 'enabled': True,
                 'network_setting': lan2['ipv4']
             }
+            if ha_pair:
+                extra_data['virtual_router_id'] = lan2_vrid
 
         return self._create_infoblox_object('member', member_data, extra_data)
 
     def pre_provision_member(self, member_name,
                              hwmodel=None, hwtype='IB-VNIOS',
-                             licenses=None):
+                             licenses=None, ha_pair=False):
         if licenses is None:
             licenses = []
+        if not isinstance(licenses, list):
+            licenses = [licenses]
+        hw_info = {'hwmodel': hwmodel, 'hwtype': hwtype}
         extra_data = {'pre_provisioning': {
-            'hardware_info': [{'hwmodel': hwmodel, 'hwtype': hwtype}],
+            'hardware_info': [hw_info, hw_info] if ha_pair else [hw_info],
             'licenses': licenses}
         }
         self._update_infoblox_object('member', {'host_name': member_name},
@@ -89,9 +160,9 @@ class InfobloxObjectManipulator(object):
 
     def add_member_dns_additional_ip(self, member_name, ip):
         return_fields = ['additional_ip_list']
-        member_dns = self._get_member(member_name, return_fields,
-                                      fail_if_no_member=True,
-                                      object_type='member:dns')
+        member_dns = self.get_member_obj(member_name, return_fields,
+                                         fail_if_no_member=True,
+                                         object_type='member:dns')
         additional_ips = member_dns.get('additional_ip_list') or []
         additional_ips.append(ip)
         payload = {'additional_ip_list': additional_ips}
@@ -99,14 +170,23 @@ class InfobloxObjectManipulator(object):
 
     def remove_member_dns_additional_ip(self, member_name, ip):
         return_fields = ['additional_ip_list']
-        member_dns = self._get_member(member_name, return_fields,
-                                      object_type='member:dns')
+        member_dns = self.get_member_obj(member_name, return_fields,
+                                         object_type='member:dns')
         if not member_dns or not member_dns.get('additional_ip_list'):
             return
         updated_ips = [orig_ip for orig_ip in member_dns['additional_ip_list']
                        if orig_ip != str(ip)]
         payload = {'additional_ip_list': updated_ips}
         self._update_infoblox_object_by_ref(member_dns['_ref'], payload)
+
+    def update_member(self, member_name, update_data):
+        self._update_infoblox_object('member', {'host_name': member_name},
+                                     update_data)
+
+    def join_grid(self, grid_name, master_ip, shared_secret):
+        gm_params = {'grid_name': grid_name, 'master': master_ip,
+                     'shared_secret': shared_secret}
+        self.connector.call_func('join', 'grid', gm_params)
 
     def create_anycast_loopback(self, member_name, ip, enable_bgp=False,
                                 enable_ospf=False):
@@ -265,8 +345,8 @@ class InfobloxObjectManipulator(object):
                 payload = {'ospf_list': new_ospf_list}
                 self._update_infoblox_object_by_ref(member['_ref'], payload)
 
-    def _get_member(self, member_name, return_fields, fail_if_no_member=False,
-                    object_type='member'):
+    def get_member_obj(self, member_name, return_fields,
+                       fail_if_no_member=False, object_type='member'):
         member = self._get_infoblox_object_or_none(
             object_type, {'host_name': member_name},
             return_fields=return_fields)
@@ -285,8 +365,8 @@ class InfobloxObjectManipulator(object):
         neighbor_fields = ('authentication_mode', 'bgp_neighbor_pass',
                            'comment', 'interface', 'neighbor_ip', 'remote_as')
 
-        member = self._get_member(member_name, ['bgp_as'],
-                                  fail_if_no_member=True)
+        member = self.get_member_obj(member_name, ['bgp_as'],
+                                     fail_if_no_member=True)
         bgp_as_from_member = member.get('bgp_as') or []
         bgp_as = {field: bgp_opts[field] for field in bgp_fields
                   if bgp_opts.get(field) is not None}
@@ -316,7 +396,7 @@ class InfobloxObjectManipulator(object):
 
     def delete_bgp_as(self, member_name):
         """Delete BGP AS from grid member."""
-        member = self._get_member(member_name, ['bgp_as'])
+        member = self.get_member_obj(member_name, ['bgp_as'])
 
         if member:
             payload = {'bgp_as': []}
@@ -332,8 +412,8 @@ class InfobloxObjectManipulator(object):
         neighbor_fields = ('authentication_mode', 'bgp_neighbor_pass',
                            'comment', 'interface', 'neighbor_ip', 'remote_as')
 
-        member = self._get_member(member_name, ['bgp_as'],
-                                  fail_if_no_member=True)
+        member = self.get_member_obj(member_name, ['bgp_as'],
+                                     fail_if_no_member=True)
 
         bgp_as_from_member = member.get('bgp_as')
         if not bgp_as_from_member:
@@ -356,7 +436,7 @@ class InfobloxObjectManipulator(object):
 
     def delete_bgp_neighbor(self, member_name, neighbor_ip):
         """Delete BGP neighbor from grid member."""
-        member = self._get_member(member_name, ['bgp_as'])
+        member = self.get_member_obj(member_name, ['bgp_as'])
 
         if member and member['bgp_as']:
             neighbors = []
