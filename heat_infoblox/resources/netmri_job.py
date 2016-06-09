@@ -15,6 +15,7 @@
 
 import logging
 
+from heat.common.i18n import _
 from heat.engine import resource
 from heat.engine import support
 
@@ -32,7 +33,9 @@ class NetMRIJob(resource.Resource, mri.NetMRIResourceMixin):
     PROPERTIES = mri.NetMRIResourceMixin.PROPERTIES
     ATTRIBUTES = mri.NetMRIResourceMixin.ATTRIBUTES
 
-    support_status = support.SupportStatus(support.UNSUPPORTED)
+    support_status = support.SupportStatus(
+        support.UNSUPPORTED,
+        _('See support.infoblox.com for support.'))
 
     properties_schema = {
         constants.CONNECTION:

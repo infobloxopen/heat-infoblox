@@ -19,7 +19,6 @@ from heat.engine import properties
 
 from heat_infoblox import connector
 from heat_infoblox import constants
-from heat_infoblox import object_manipulator
 
 """Utilities for specifying resources."""
 
@@ -112,8 +111,54 @@ def connection_schema(conn_type):
 
 
 def connect_to_infoblox(conn_params):
+    from heat_infoblox import object_manipulator
     return object_manipulator.InfobloxObjectManipulator(
         connector.Infoblox({'url': conn_params[constants.URL],
                             'username': conn_params[constants.USERNAME],
                             'password': conn_params[constants.PASSWORD],
                             'sslverify': conn_params[constants.SSLVERIFY]}))
+
+
+def get_vrrp_mac(vrid, use_ipv4):
+    if not isinstance(vrid, int) or vrid < 1 or vrid > 255:
+        raise ValueError('VRID should be an integer between 0 and 256.')
+    VRRP_MAC_ADDR_BASE = '00:00:5E:00:'
+    hvrid = hex(int(vrid)).upper()[-2:]
+    if use_ipv4:
+        return VRRP_MAC_ADDR_BASE + '01:' + hvrid
+    else:
+        return VRRP_MAC_ADDR_BASE + '02:' + hvrid
+
+
+def get_ip_address(vip, use_ipv4, port_name):
+    if not vip or not isinstance(vip, dict):
+        raise ValueError('%s should be a dict.' % port_name)
+
+    if use_ipv4:
+        name = 'ipv4'
+        addr = 'address'
+    else:
+        name = 'ipv6'
+        addr = 'virtual_ip'
+
+    ip = vip.get(name, None)
+    if not ip or not isinstance(ip, dict):
+        raise ValueError('%s["%s"] should be a dict.' % (port_name, name))
+
+    address = ip.get(addr, None)
+    if not address or not isinstance(address, basestring):
+        raise ValueError(
+            '%s["%s"]["%s"] should be an address.' % (port_name, name, addr))
+
+    return address
+
+
+def fix_ha_ports_mac(neutron, vip, vrid, use_ipv4, ports):
+    for port in ports:
+        props = {
+            'allowed_address_pairs': [{
+                'ip_address': get_ip_address(vip, use_ipv4, 'vip'),
+                'mac_address': get_vrrp_mac(vrid, use_ipv4)
+                }]
+            }
+        neutron.update_port(port, {'port': props})

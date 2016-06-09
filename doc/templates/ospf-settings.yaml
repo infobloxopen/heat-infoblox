@@ -1,0 +1,92 @@
+heat_template_version: 2014-10-16
+description: Template to configure OSPF settings on existent Grid
+parameters:
+  grid_members:
+    type: comma_delimited_list
+    description: Comma delimited list of Grid Member host names
+  advertise_interface_vlan:
+    type: string
+    description: >
+      The VLAN used as the advertising interface for sending OSPF announcements.
+      Has to be set only if 'interface' is set to 'IP'.
+    default: ''
+  area_id:
+    type: string
+    description: The area ID value of the OSPF settings.
+  area_type:
+    type: string
+    description: The OSPF area type ('NSSA', 'STANDARD', 'STUB')
+    default: 'STANDARD'
+  authentication_key:
+    type: string
+    description: The authentication password to use for OSPF.
+    default: ''
+  authentication_type:
+    type: string
+    description: >
+      The authentication type used for the OSPF advertisement
+      ('MESSAGE_DIGEST', 'NONE', 'SIMPLE').
+    default: 'NONE'
+  auto_calc_cost_enabled:
+    type: boolean
+    description: Determines if auto calculate cost is enabled or not.
+    default: True
+  comment:
+    type: string
+    description: A descriptive comment of the OSPF configuration.
+    default: ''
+  cost:
+    type: number
+    description: The cost metric associated with the OSPF advertisement.
+    default: 0
+  dead_interval:
+    type: number
+    description: The dead interval value of OSPF (in seconds).
+    default: 40
+  hello_interval:
+    type: number
+    description: The hello interval value of OSPF.
+    default: 10
+  interface:
+    type: string
+    description: >
+      The interface that sends out OSPF advertisement information
+      ('IP', 'LAN_HA')
+    default: 'LAN_HA'
+  is_ipv4:
+    type: boolean
+    description: The OSPF protocol version.
+    default: True
+  key_id:
+    type: number
+    description: The hash key identifier to use for "MESSAGE_DIGEST" authentication.
+    default: 1
+  retransmit_interval:
+    type: number
+    description: The retransmit interval time of OSPF (in seconds).
+    default: 5
+  transmit_delay:
+    type: number
+    description: The transmit delay value of OSPF (in seconds).
+    default: 1
+resources:
+  ospf:
+    type: Infoblox::Grid::Ospf
+    properties:
+      connection: { url: "https://10.40.240.113/wapi/v2.3/", username: admin, password: infoblox, sslverify: False }
+      grid_members: { get_param: grid_members }
+      advertise_interface_vlan: { get_param: advertise_interface_vlan }
+      area_id: { get_param: area_id }
+      area_type: { get_param: area_type }
+      authentication_key: { get_param: authentication_key }
+      authentication_type: { get_param: authentication_type }
+      auto_calc_cost_enabled: { get_param: auto_calc_cost_enabled }
+      comment: { get_param: comment }
+      cost: { get_param: cost }
+      dead_interval: { get_param: dead_interval }
+      hello_interval: { get_param: hello_interval }
+      interface: { get_param: interface }
+      is_ipv4: { get_param: is_ipv4 }
+      key_id: { get_param: key_id }
+      retransmit_interval: { get_param: retransmit_interval }
+      transmit_delay: { get_param: transmit_delay }

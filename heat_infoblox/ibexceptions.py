@@ -99,3 +99,12 @@ class NoInfobloxMemberAvailable(ResourceExhausted):
 
 class InfobloxObjectParsingError(InfobloxExceptionBase):
     message = _("Infoblox object cannot be parsed from dict: %(data)s")
+
+
+class InfobloxGridMemberNotFound(InfobloxExceptionBase):
+    message = _("Infoblox Grid Member '%(name)s' was not found.")
+
+
+class InfobloxBgpNotConfigured(InfobloxExceptionBase):
+    message = _("BGP Autonomous System is not configured on "
+                "Infoblox Grid Member '%(name)s'.")

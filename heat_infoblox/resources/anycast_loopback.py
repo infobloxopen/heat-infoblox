@@ -19,6 +19,7 @@ from heat.common.i18n import _
 from heat.engine import properties
 from heat.engine import resource
 from heat.engine import support
+from oslo_concurrency import lockutils
 
 from heat_infoblox import constants
 from heat_infoblox import resource_utils
@@ -34,12 +35,10 @@ class AnycastLoopback(resource.Resource):
     """
 
     PROPERTIES = (
-        IP, GRID_MEMBERS, ENABLE_BGP, ENABLE_OSPF,
+        IP, GRID_MEMBERS, ENABLE_BGP, ENABLE_OSPF, ENABLE_DNS,
         ) = (
-        'ip', 'grid_members', 'enable_bgp', 'enable_ospf',
+        'ip', 'grid_members', 'enable_bgp', 'enable_ospf', 'enable_dns',
         )
-
-    DELIM = '/'
 
     support_status = support.SupportStatus(
         support.UNSUPPORTED,
@@ -69,6 +68,10 @@ class AnycastLoopback(resource.Resource):
             _('Determines if the OSPF advertisement setting is enabled '
               'for this interface or not.'),
             required=False),
+        ENABLE_DNS: properties.Schema(
+            properties.Schema.BOOLEAN,
+            _('Determines if the Anycast IP will be used to serve DNS.'),
+            required=False),
     }
 
     @property
@@ -81,24 +84,34 @@ class AnycastLoopback(resource.Resource):
     def handle_create(self):
         ip = self.properties[self.IP]
         for member_name in self.properties[self.GRID_MEMBERS]:
-            self.infoblox.create_anycast_loopback(
-                member_name,
-                ip,
-                self.properties[self.ENABLE_BGP],
-                self.properties[self.ENABLE_OSPF])
-
-        identifiers = [ip] + self.properties[self.GRID_MEMBERS]
-        resource_id = self.DELIM.join(identifiers)
-        self.resource_id_set(resource_id)
+            with lockutils.lock(member_name,
+                                external=True,
+                                lock_file_prefix='infoblox-anycast'):
+                self.infoblox.create_anycast_loopback(
+                    member_name,
+                    ip,
+                    self.properties[self.ENABLE_BGP],
+                    self.properties[self.ENABLE_OSPF])
+            if self.properties[self.ENABLE_DNS]:
+                with lockutils.lock(member_name,
+                                    external=True,
+                                    lock_file_prefix='infoblox-dns-ips'):
+                    self.infoblox.add_member_dns_additional_ip(member_name,
+                                                               ip)
 
     def handle_delete(self):
-        if self.resource_id:
-            identifiers = self.resource_id.split(self.DELIM)
-            if len(identifiers) > 1:
-                ip = identifiers[0]
-                members = identifiers[1:]
-                for member in members:
-                    self.infoblox.delete_anycast_loopback(ip, member)
+        ip = self.properties[self.IP]
+        for member_name in self.properties[self.GRID_MEMBERS]:
+            if self.properties[self.ENABLE_DNS]:
+                with lockutils.lock(member_name,
+                                    external=True,
+                                    lock_file_prefix='infoblox-dns-ips'):
+                    self.infoblox.remove_member_dns_additional_ip(member_name,
+                                                                  ip)
+            with lockutils.lock(member_name,
+                                external=True,
+                                lock_file_prefix='infoblox-anycast'):
+                self.infoblox.delete_anycast_loopback(ip, member_name)
 
 
 def resource_mapping():
