@@ -30,11 +30,16 @@ OpenStack Configuration
 
 You must update the ``plugin_dirs`` parameter in the ``heat.conf`` file
 to include the resources from this module. Typically this would mean
-adding ``/usr/local/lib/python2.7/dist-packages/heat_infoblox``:
-
+adding ``/usr/local/lib/python2.7/dist-packages/heat_infoblox``.
+Also you must add ``lock_path`` under ``oslo_concurrency`` stanza.
+For security, the specified directory should only be writable by the user
+running the heat process:
 ::
 
   plugin_dirs = /usr/local/lib/python2.7/dist-packages/heat_infoblox,/usr/lib64/heat,/usr/lib/heat
+  [oslo_concurrency]
+  # replace it with a directory writable by the user running the heat process
+  lock_path = /home/user/directory_for_locks
 
 The Heat engine must be restarted after installation and configuration of the
 package.

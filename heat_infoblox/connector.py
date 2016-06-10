@@ -45,7 +45,8 @@ class Infoblox(object):
 
         reqd_opts = ['url', 'username', 'password']
         default_opts = {'http_pool_connections': 5,
-                        'http_pool_maxsize': 20}
+                        'http_pool_maxsize': 20,
+                        'max_retries': 5}
         for opt in reqd_opts + default_opts.keys():
             setattr(self, opt, options.get(opt) or default_opts.get(opt))
 
@@ -56,7 +57,7 @@ class Infoblox(object):
 
         self.session = requests.Session()
         adapter = requests.adapters.HTTPAdapter(
-            max_retries=5,
+            max_retries=self.max_retries,
             pool_connections=self.http_pool_connections,
             pool_maxsize=self.http_pool_maxsize)
         self.session.mount('http://', adapter)

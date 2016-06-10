@@ -18,6 +18,7 @@ import gettext
 import logging
 
 from heat_infoblox import ibexceptions as exc
+from heat_infoblox import resource_utils
 
 _ = gettext.gettext
 
@@ -37,24 +38,89 @@ class InfobloxObjectManipulator(object):
         )
 
     def create_member(self, name=None, platform='VNIOS',
-                      mgmt=None, lan1={}, lan2=None,
-                      nat_ip=None):
+                      config_addr_type='IPV4', vip=None, mgmt=None, lan2=None,
+                      nat_ip=None,
+                      ha_pair=False, use_v4_vrrp=True, vrid=None,
+                      node1_ha=None, node2_ha=None,
+                      node1_lan1=None, node2_lan1=None,
+                      node2_mgmt=None, node2_lan2=None, lan2_vrid=None):
         member_data = {'host_name': name, 'platform': platform}
         extra_data = {}
 
-        if lan1.get('ipv4', None):
-            extra_data['vip_setting'] = lan1['ipv4']
-        if lan1.get('ipv6', None):
-            extra_data['ipv6_setting'] = lan1['ipv6']
+        if ha_pair:
+            # For HA pair we use IPv4 or IPv6 address, not both
+            node1 = {}
+            node2 = {}
+            if config_addr_type == 'IPV6':
+                ipv4 = False
+            elif config_addr_type == 'BOTH':
+                ipv4 = use_v4_vrrp
+            else:  # default configuration is 'IPV4'
+                ipv4 = True
+            node1['ha_ip_address'] = resource_utils.get_ip_address(
+                node1_ha, ipv4, 'node1_ha')
+            node1['mgmt_lan'] = resource_utils.get_ip_address(
+                node1_lan1, ipv4, 'node1_lan1')
+            node2['ha_ip_address'] = resource_utils.get_ip_address(
+                node2_ha, ipv4, 'node2_ha')
+            node2['mgmt_lan'] = resource_utils.get_ip_address(
+                node2_lan1, ipv4, 'node2_lan1')
+            extra_data = {
+                'enable_ha': True,
+                'router_id': vrid,
+                'node_info': [
+                    {'lan_ha_port_setting': node1},
+                    {'lan_ha_port_setting': node2}
+                    ]
+                }
+
+        if config_addr_type in ('IPV4', 'BOTH'):
+            # Check that IPv4 address available
+            resource_utils.get_ip_address(vip, True, 'vip')
+            # Copy IPv4 address settings
+            extra_data['vip_setting'] = vip['ipv4'].copy()
+        if config_addr_type in ('IPV6', 'BOTH'):
+            # Check that IPv6 address available
+            resource_utils.get_ip_address(vip, False, 'vip')
+            # Copy IPv6 address settings
+            extra_data['ipv6_setting'] = vip['ipv6'].copy()
         if nat_ip:
             extra_data['nat_setting'] = {
                 'enabled': True,
                 'external_virtual_ip': nat_ip
             }
 
-        if mgmt and mgmt.get('ipv4', None):
-            extra_data['node_info'] = [{"mgmt_network_setting": mgmt['ipv4']}]
-            extra_data['mgmt_port_setting'] = {"enabled": True}
+        if mgmt:
+            if config_addr_type in ('IPV4', 'BOTH'):
+                # Check that MGMT IPv4 address available
+                resource_utils.get_ip_address(mgmt, True, 'MGMT')
+                extra_data['mgmt_port_setting'] = {"enabled": True}
+                if ha_pair:
+                    # Check that node2 MGMT IPv4 address available
+                    resource_utils.get_ip_address(node2_mgmt, True,
+                                                  'node2_MGMT')
+                    extra_data['node_info'][0] = {
+                        'mgmt_network_setting': mgmt['ipv4']}
+                    extra_data['node_info'][1] = {
+                        'mgmt_network_setting': node2_mgmt['ipv4']}
+                else:
+                    extra_data['node_info'] = [
+                        {'mgmt_network_setting': mgmt['ipv4']}]
+            if config_addr_type in ('IPV6', 'BOTH'):
+                # Check that IPv6 address available
+                resource_utils.get_ip_address(mgmt, False, 'MGMT')
+                extra_data['v6_mgmt_network_setting'] = {"enabled": True}
+                if ha_pair:
+                    # Check that node2 MGMT IPv4 address available
+                    resource_utils.get_ip_address(node2_mgmt, True,
+                                                  'node2_MGMT')
+                    extra_data['node_info'][0] = {
+                        'v6_mgmt_network_setting': mgmt['ipv4']}
+                    extra_data['node_info'][1] = {
+                        'v6_mgmt_network_setting': node2_mgmt['ipv4']}
+                else:
+                    extra_data['node_info'] = [
+                        {'v6_mgmt_network_setting': mgmt['ipv4']}]
 
         if lan2 and lan2.get('ipv4', None):
             extra_data['lan2_enabled'] = True
@@ -62,16 +128,21 @@ class InfobloxObjectManipulator(object):
                 'enabled': True,
                 'network_setting': lan2['ipv4']
             }
+            if ha_pair:
+                extra_data['virtual_router_id'] = lan2_vrid
 
         return self._create_infoblox_object('member', member_data, extra_data)
 
     def pre_provision_member(self, member_name,
                              hwmodel=None, hwtype='IB-VNIOS',
-                             licenses=None):
+                             licenses=None, ha_pair=False):
         if licenses is None:
             licenses = []
+        if not isinstance(licenses, list):
+            licenses = [licenses]
+        hw_info = {'hwmodel': hwmodel, 'hwtype': hwtype}
         extra_data = {'pre_provisioning': {
-            'hardware_info': [{'hwmodel': hwmodel, 'hwtype': hwtype}],
+            'hardware_info': [hw_info, hw_info] if ha_pair else [hw_info],
             'licenses': licenses}
         }
         self._update_infoblox_object('member', {'host_name': member_name},
@@ -87,6 +158,36 @@ class InfobloxObjectManipulator(object):
         member_data = {'host_name': member_name}
         self._delete_infoblox_object('member', member_data)
 
+    def add_member_dns_additional_ip(self, member_name, ip):
+        return_fields = ['additional_ip_list']
+        member_dns = self.get_member_obj(member_name, return_fields,
+                                         fail_if_no_member=True,
+                                         object_type='member:dns')
+        additional_ips = member_dns.get('additional_ip_list') or []
+        additional_ips.append(ip)
+        payload = {'additional_ip_list': additional_ips}
+        self._update_infoblox_object_by_ref(member_dns['_ref'], payload)
+
+    def remove_member_dns_additional_ip(self, member_name, ip):
+        return_fields = ['additional_ip_list']
+        member_dns = self.get_member_obj(member_name, return_fields,
+                                         object_type='member:dns')
+        if not member_dns or not member_dns.get('additional_ip_list'):
+            return
+        updated_ips = [orig_ip for orig_ip in member_dns['additional_ip_list']
+                       if orig_ip != str(ip)]
+        payload = {'additional_ip_list': updated_ips}
+        self._update_infoblox_object_by_ref(member_dns['_ref'], payload)
+
+    def update_member(self, member_name, update_data):
+        self._update_infoblox_object('member', {'host_name': member_name},
+                                     update_data)
+
+    def join_grid(self, grid_name, master_ip, shared_secret):
+        gm_params = {'grid_name': grid_name, 'master': master_ip,
+                     'shared_secret': shared_secret}
+        self.connector.call_func('join', 'grid', gm_params)
+
     def create_anycast_loopback(self, member_name, ip, enable_bgp=False,
                                 enable_ospf=False):
         anycast_loopback = {
@@ -96,7 +197,8 @@ class InfobloxObjectManipulator(object):
             'interface': 'LOOPBACK'}
         if ':' in ip:
             anycast_loopback['ipv6_network_setting'] = {
-                'virtual_ip': ip}
+                'virtual_ip': ip,
+                'cidr_prefix': 128}
         else:
             anycast_loopback['ipv4_network_setting'] = {
                 'address': ip,
@@ -170,17 +272,58 @@ class InfobloxObjectManipulator(object):
         self._update_infoblox_object('nsgroup', {'name': group_name},
                                      group)
 
-    def create_ospf(self, member_name, ospf_options_dict):
-        """Add ospf settings to the grid member."""
+    @staticmethod
+    def _copy_fields_or_raise(source_dict, dest_dict, fields):
+        for field in fields:
+            if field not in source_dict:
+                raise ValueError(_("Field '{}' is required").format(field))
+            else:
+                dest_dict[field] = source_dict[field]
+
+    def create_ospf(self, member_name, ospf_options_dict, old_area_id=None):
+        """Add ospf settings to the grid member.
+
+        If old_area_id is passed ospf settings are updated instead of creation
+        """
+        required_fields = ('area_id', 'area_type', 'auto_calc_cost_enabled',
+                           'authentication_type', 'is_ipv4', 'interface')
+        optional_fields = ('comment', 'dead_interval', 'hello_interval',
+                           'interface', 'retransmit_interval',
+                           'transmit_delay')
+        opts = {}
+        self._copy_fields_or_raise(ospf_options_dict, opts, required_fields)
+
+        conditional_fields = []
+        # Process fields that become required depending on another field value
+        if opts['auto_calc_cost_enabled'] is False:
+            conditional_fields.append('cost')
+        if opts['interface'] == 'IP':
+            conditional_fields.append('advertise_interface_vlan')
+
+        if opts['authentication_type'] == 'MESSAGE_DIGEST':
+            conditional_fields.extend(['authentication_key', 'key_id'])
+        elif opts['authentication_type'] == 'SIMPLE':
+            conditional_fields.append('authentication_key')
+        self._copy_fields_or_raise(ospf_options_dict, opts, conditional_fields)
+
+        # Copy optional fields if value is set
+        for field in optional_fields:
+            if ospf_options_dict.get(field):
+                opts[field] = ospf_options_dict[field]
+
         member = self._get_infoblox_object_or_none(
             'member', {'host_name': member_name},
             return_fields=['ospf_list'])
 
-        # Should we raise some exception here or just log object not found?
         if not member:
             LOG.error(_("Grid Member %(name)s is not found"),
                       {'name': member_name})
-        ospf_list = member['ospf_list'] + [ospf_options_dict]
+            return
+        # Remove old area_id in case of update
+        ospf_list = [ospf for ospf in member['ospf_list']
+                     if (old_area_id is None or
+                         str(old_area_id) != ospf.get('area_id'))]
+        ospf_list.append(opts)
         payload = {'ospf_list': ospf_list}
         self._update_infoblox_object_by_ref(member['_ref'], payload)
 
@@ -200,6 +343,112 @@ class InfobloxObjectManipulator(object):
                 new_ospf_list.append(ospf_settings)
             if update_this_member:
                 payload = {'ospf_list': new_ospf_list}
+                self._update_infoblox_object_by_ref(member['_ref'], payload)
+
+    def get_member_obj(self, member_name, return_fields,
+                       fail_if_no_member=False, object_type='member'):
+        member = self._get_infoblox_object_or_none(
+            object_type, {'host_name': member_name},
+            return_fields=return_fields)
+        if fail_if_no_member and not member:
+            raise exc.InfobloxGridMemberNotFound(name=member_name)
+        return member
+
+    def create_bgp_as(self, member_name, bgp_opts, old_neighbor_ip=None):
+        """Configure BGP AS on grid member.
+
+        Creates or updates BGP Autonomous System configuration on grid member.
+        Additionally configures one BGP Neighbor. Adding BGP AS configuration
+        requires at least one Neighbor to be configured on member.
+        """
+        bgp_fields = ('as', 'holddown', 'keepalive', 'link_detect')
+        neighbor_fields = ('authentication_mode', 'bgp_neighbor_pass',
+                           'comment', 'interface', 'neighbor_ip', 'remote_as')
+
+        member = self.get_member_obj(member_name, ['bgp_as'],
+                                     fail_if_no_member=True)
+        bgp_as_from_member = member.get('bgp_as') or []
+        bgp_as = {field: bgp_opts[field] for field in bgp_fields
+                  if bgp_opts.get(field) is not None}
+        new_neighbor = {field: bgp_opts[field]
+                        for field in neighbor_fields
+                        if bgp_opts.get(field) is not None}
+
+        # If old_neighbor_ip is defined then we are doing update.
+        # Original neighbors are preserved, but old_neighbor_ip has to be
+        # removed from this list, since this neighbor is regenerated as
+        # new_neighbor.
+        neighbors = []
+        if old_neighbor_ip and bgp_as_from_member:
+            neighbors = [neighbor
+                         for neighbor in bgp_as_from_member[0]['neighbors']
+                         if str(old_neighbor_ip) != neighbor['neighbor_ip']]
+        neighbors.append(new_neighbor)
+
+        if len(bgp_as_from_member) > 0:
+            bgp_as_from_member[0].update(bgp_as)
+        else:
+            bgp_as_from_member.append(bgp_as)
+        bgp_as_from_member[0]['neighbors'] = neighbors
+
+        payload = {'bgp_as': bgp_as_from_member}
+        self._update_infoblox_object_by_ref(member['_ref'], payload)
+
+    def delete_bgp_as(self, member_name):
+        """Delete BGP AS from grid member."""
+        member = self.get_member_obj(member_name, ['bgp_as'])
+
+        if member:
+            payload = {'bgp_as': []}
+            self._update_infoblox_object_by_ref(member['_ref'], payload)
+
+    def create_bgp_neighbor(self, member_name, bgp_neighbor_opts,
+                            old_neighbor_ip=None):
+        """Configure BGP neighbor on grid member.
+
+        Adds new BGP neighbor to existent BGP neighbor list. Updates neighbor
+        if 'old_neighbor_ip' is specified.
+        """
+        neighbor_fields = ('authentication_mode', 'bgp_neighbor_pass',
+                           'comment', 'interface', 'neighbor_ip', 'remote_as')
+
+        member = self.get_member_obj(member_name, ['bgp_as'],
+                                     fail_if_no_member=True)
+
+        bgp_as_from_member = member.get('bgp_as')
+        if not bgp_as_from_member:
+            raise exc.InfobloxBgpAsNotConfigured(name=member_name)
+
+        new_neighbor = {field: bgp_neighbor_opts[field]
+                        for field in neighbor_fields
+                        if bgp_neighbor_opts.get(field) is not None}
+
+        # Remove old neighbor from neighbors list in case of update
+        neighbors = [neighbor
+                     for neighbor in bgp_as_from_member[0]['neighbors']
+                     if (old_neighbor_ip is None or
+                         str(old_neighbor_ip) != neighbor['neighbor_ip'])]
+        neighbors.append(new_neighbor)
+
+        bgp_as_from_member[0]['neighbors'] = neighbors
+        payload = {'bgp_as': bgp_as_from_member}
+        self._update_infoblox_object_by_ref(member['_ref'], payload)
+
+    def delete_bgp_neighbor(self, member_name, neighbor_ip):
+        """Delete BGP neighbor from grid member."""
+        member = self.get_member_obj(member_name, ['bgp_as'])
+
+        if member and member['bgp_as']:
+            neighbors = []
+            update_member = False
+            for neighbor in member['bgp_as'][0]['neighbors']:
+                if str(neighbor_ip) == neighbor['neighbor_ip']:
+                    update_member = True
+                else:
+                    neighbors.append(neighbor)
+            if update_member:
+                member['bgp_as'][0]['neighbors'] = neighbors
+                payload = {'bgp_as': member['bgp_as']}
                 self._update_infoblox_object_by_ref(member['_ref'], payload)
 
     def create_dns_view(self, net_view_name, dns_view_name):

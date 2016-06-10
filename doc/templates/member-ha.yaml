@@ -1,0 +1,154 @@
+heat_template_version: 2014-10-16
+description: An Infoblox HA pair Grid Member.
+parameters:
+  external_network:
+    type: string
+    description: the external network for floating IP allocations
+    default: public-138-net
+  model:
+    type: string
+    description: vNIOS Model
+    default: IB-VM-810
+  flavor:
+    type: string
+    description: vNIOS Flavor
+    default: vnios-810.55
+  image:
+    type: string
+    description: vNIOS image
+    default: nios-7.3.0-314102-55G-810
+  wapi_url:
+    type: string
+    description: the URL to access the GM WAPI from the Heat engine
+  wapi_username:
+    type: string
+    description: the username for the WAPI access
+  wapi_password:
+    type: string
+    description: the username for the WAPI access
+  wapi_sslverify:
+    type: string
+    description: the value for SSL Verify (true/false/certificate path)
+    default: false
+  gm_vip:
+    type: string
+    description: the VIP of the GM, to be used by members for joining the grid
+  gm_cert:
+    type: string
+    description: the GM certificate contents
+  security_group:
+    type: string
+    description: the security group to use
+    default: Infoblox
+  lan1_network:
+    type: string
+    description: the protocol network (must have a /24 network for auto addressing to work)
+    default: protocol-net
+    constraints:
+      - custom_constraint: neutron.network
+  virtual_router_id:
+    type: number
+    default: 200
+resources:
+  host_name:
+    type: OS::Heat::RandomString
+    properties:
+      length: 12
+      sequence: lowercase
+
+  vip_port:
+    type: OS::Neutron::Port
+    properties:
+      network: {get_param: lan1_network}
+      security_groups: [{get_param: security_group}]
+
+# We pre-allocate the port for LAN1, so that we have the IP address already for
+# injection via user_data
+  lan1_port_node_1:
+    type: OS::Neutron::Port
+    properties:
+      network: {get_param: lan1_network}
+      security_groups: [{get_param: security_group}]
+
+  ha_port_node_1:
+    type: OS::Neutron::Port
+    depends_on: [vip_port]
+    properties:
+      network: {get_param: lan1_network}
+      security_groups: [{get_param: security_group}]
+
+  lan1_port_node_2:
+    type: OS::Neutron::Port
+    properties:
+      network: {get_param: lan1_network}
+      security_groups: [{get_param: security_group}]
+
+  ha_port_node_2:
+    type: OS::Neutron::Port
+    depends_on: [vip_port]
+    properties:
+      network: {get_param: lan1_network}
+      security_groups: [{get_param: security_group}]
+
+# Each member needs a floating IP so Ceilometer can poll the member for QPS.
+
+  vip_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: {get_param: external_network}
+      port_id: {get_resource: vip_port}
+
+  node_1_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: {get_param: external_network}
+      port_id: {get_resource: lan1_port_node_1}
+
+  node_2_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: {get_param: external_network}
+      port_id: {get_resource: lan1_port_node_2}
+
+  grid_member:
+    type: Infoblox::Grid::Member
+    properties:
+      connection: {url: {get_param: wapi_url}, username: {get_param: wapi_username}, password: {get_param: wapi_password}, sslverify: {get_param: wapi_sslverify}}
+      name: { list_join: [ '.', [{ list_join: [ '-', [ 'member-dns', { get_resource: host_name } ]] }, 'localdomain' ]] }
+      model: { get_param: model }
+      LAN1: { get_resource: lan1_port_node_1 }
+      HA: { get_resource: ha_port_node_1 }
+      dns: { enable: True }
+      temp_licenses: ["vnios", "dns", "enterprise", "rpz"]
+      gm_ip: { get_param: gm_vip }
+      gm_certificate: { get_param: gm_cert }
+      remote_console_enabled: true
+      admin_password: infoblox
+      ha_pair: True
+      VIP: { get_resource: vip_port }
+      virtual_router_id: { get_param: virtual_router_id }
+      node2_HA: { get_resource: ha_port_node_2 }
+      node2_LAN1: { get_resource: lan1_port_node_2 }
+
+  node1:
+    type: OS::Nova::Server
+    properties:
+      name: { list_join: [ '-', [ 'member-dns', { get_resource: host_name }, 'node1' ]] }
+      flavor: { get_param: flavor }
+      image: { get_param: image }
+      networks: [{network: mgmt-net }, {port: { get_resource: lan1_port_node_1}},  {port: { get_resource: ha_port_node_1}} ]
+      config_drive: true
+      user_data_format: RAW
+      user_data: { get_attr: [grid_member, user_data] }
+
+  node2:
+    type: OS::Nova::Server
+    properties:
+      name: { list_join: [ '-', [ 'member-dns', { get_resource: host_name }, 'node2' ]] }
+      flavor: { get_param: flavor }
+      image: { get_param: image }
+      networks: [{network: mgmt-net }, {port: { get_resource: lan1_port_node_2}},  {port: { get_resource: ha_port_node_2}}]
+      config_drive: true
+      user_data_format: RAW
+      user_data: { get_attr: [grid_member, node2_user_data] }
+

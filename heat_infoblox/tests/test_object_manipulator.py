@@ -71,7 +71,8 @@ class TestObjectManipulator(testtools.TestCase):
         ip = 'fffe::5'
         expected_anycast_dict = {'anycast': True,
                                  'ipv6_network_setting':
-                                     {'virtual_ip': ip},
+                                     {'virtual_ip': ip,
+                                      'cidr_prefix': 128},
                                  'enable_bgp': True,
                                  'interface': 'LOOPBACK',
                                  'enable_ospf': True}
@@ -143,19 +144,50 @@ class TestObjectManipulator(testtools.TestCase):
             mock.call(members[1]['_ref'], {'additional_ip_list': []})]
         self._test_delete_anycast_loopback(ip, members, expected_calls)
 
-    def _test_create_ospf(self, members, ospf_options, expected_options):
+    def test__copy_fields_or_raise(self):
+        fields = ['field-one', 'field-two']
+        source = {'field-one': 1,
+                  'field-two': 'text',
+                  'non-copy': 12}
+        dest = {}
+        object_manipulator.InfobloxObjectManipulator._copy_fields_or_raise(
+            source, dest, fields)
+        self.assertEqual(2, len(dest))
+        self.assertEqual(1, dest['field-one'])
+        self.assertEqual('text', dest['field-two'])
+
+    def test__copy_fields_or_raise_raises_value_error(self):
+        fields = ['field-one']
+        source = {'non-copy': 12}
+        dest = {}
+        objm = object_manipulator.InfobloxObjectManipulator
+        self.assertRaises(ValueError,
+                          objm._copy_fields_or_raise,
+                          source,
+                          dest,
+                          fields)
+
+    def _test_configuration_update(self, method_name, object_type, field,
+                                   members, create_options, expected_options,
+                                   **kwargs):
         member_name = 'my_member'
 
         connector = mock.Mock()
         connector.get_object.return_value = members
         om = object_manipulator.InfobloxObjectManipulator(connector)
-        om.create_ospf(member_name, ospf_options)
+        method_to_call = getattr(om, method_name)
+        method_to_call(member_name, create_options)
 
         connector.get_object.assert_called_once_with(
-            'member', {'host_name': member_name},
-            ['ospf_list'], extattrs=None)
+            object_type, {'host_name': member_name},
+            [field], extattrs=None)
         connector.update_object.assert_called_once_with(
-            members[0]['_ref'], {'ospf_list': expected_options})
+            members[0]['_ref'], {field: expected_options})
+
+    def _test_create_ospf(self, members, ospf_options, expected_options):
+        self._test_configuration_update('create_ospf', 'member', 'ospf_list',
+                                        members, ospf_options,
+                                        expected_options)
 
     def test_create_ospf(self):
         members = [
@@ -164,12 +196,57 @@ class TestObjectManipulator(testtools.TestCase):
         ospf_options = dict(advertise_interface_vlan=10,
                             area_id='1',
                             area_type='STANDARD',
+                            authentication_key='12',
                             authentication_type='NONE',
                             interface='IP',
                             is_ipv4=True,
+                            key_id=12,
                             auto_calc_cost_enabled=True)
-        expected_option = [ospf_options]
-        self._test_create_ospf(members, ospf_options, expected_option)
+        expected_option = ospf_options.copy()
+        # Remove fields that are not used in current conditions
+        del expected_option['authentication_key']
+        del expected_option['key_id']
+        self._test_create_ospf(members, ospf_options, [expected_option])
+
+    def test_create_ospf_mesage_digest_and_ha(self):
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'ospf_list': []}]
+        ospf_options = dict(advertise_interface_vlan=10,
+                            area_id='1',
+                            area_type='STANDARD',
+                            authentication_key='12',
+                            authentication_type='MESSAGE_DIGEST',
+                            interface='LAN_HA',
+                            is_ipv4=True,
+                            key_id=12,
+                            cost=5,
+                            auto_calc_cost_enabled=True)
+        expected_option = ospf_options.copy()
+        # Remove fields that are not used in current conditions
+        del expected_option['advertise_interface_vlan']
+        del expected_option['cost']
+        self._test_create_ospf(members, ospf_options, [expected_option])
+
+    def test_create_ospf_simple(self):
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'ospf_list': []}]
+        ospf_options = dict(advertise_interface_vlan=10,
+                            area_id='1',
+                            area_type='STANDARD',
+                            authentication_key='12',
+                            authentication_type='SIMPLE',
+                            interface='LAN_HA',
+                            is_ipv4=True,
+                            key_id=12,
+                            cost=5,
+                            auto_calc_cost_enabled=False)
+        expected_option = ospf_options.copy()
+        # Remove fields that are not used in current conditions
+        del expected_option['advertise_interface_vlan']
+        del expected_option['key_id']
+        self._test_create_ospf(members, ospf_options, [expected_option])
 
     def test_create_ospf_with_existent_settings(self):
         members = [
@@ -236,3 +313,292 @@ class TestObjectManipulator(testtools.TestCase):
                                            'interface': 'IP',
                                            'is_ipv4': 'true'}]}
         self._test_delete_ospf(members, expected_options)
+
+    def _test_bgp_as(self, members, bgp_options, expected_options, **kwargs):
+        self._test_configuration_update('create_bgp_as', 'member', 'bgp_as',
+                                        members, bgp_options, expected_options,
+                                        **kwargs)
+
+    def _test_bgp_neighbor(self, members, bgp_options, expected_options):
+        self._test_configuration_update('create_bgp_neighbor', 'member',
+                                        'bgp_as', members, bgp_options,
+                                        expected_options)
+
+    def test_create_bgp_as(self):
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'bgp_as': []}]
+        bgp_options = {'as': 2,
+                       'holddown': 15,
+                       'keepalive': 20,
+                       'link_detect': True,
+                       'authentication_mode': 'MD5',
+                       'bgp_neighbor_pass': 'somepass',
+                       'comment': 'comment',
+                       'interface': 'LAN_HA',
+                       'neighbor_ip': '192.168.1.10',
+                       'remote_as': 20}
+        expected_options = {'as': 2,
+                            'holddown': 15,
+                            'keepalive': 20,
+                            'link_detect': True,
+                            'neighbors': [
+                                {'authentication_mode': 'MD5',
+                                 'bgp_neighbor_pass': 'somepass',
+                                 'comment': 'comment',
+                                 'interface': 'LAN_HA',
+                                 'neighbor_ip': '192.168.1.10',
+                                 'remote_as': 20}]
+                            }
+        self._test_bgp_as(members, bgp_options, [expected_options])
+
+    def test_update_bgp_as(self):
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'bgp_as': [{'as': 2,
+                         'holddown': 15,
+                         'keepalive': 20,
+                         'link_detect': True,
+                         'neighbors': [
+                             {'authentication_mode': 'MD5',
+                              'bgp_neighbor_pass': 'somepass',
+                              'comment': 'comment',
+                              'interface': 'LAN_HA',
+                              'neighbor_ip': '192.168.1.10',
+                              'remote_as': 20}]
+                         }
+                        ]}]
+        bgp_options = {'as': 10,
+                       'holddown': 40,
+                       'keepalive': 60,
+                       'link_detect': False,
+                       'authentication_mode': 'MD5',
+                       'bgp_neighbor_pass': 'newpass',
+                       'comment': 'new_comment',
+                       'interface': 'LAN_HA',
+                       'neighbor_ip': '192.168.1.25',
+                       'remote_as': 30
+                       }
+        expected_options = {'as': 10,
+                            'holddown': 40,
+                            'keepalive': 60,
+                            'link_detect': False,
+                            'neighbors': [
+                                {'authentication_mode': 'MD5',
+                                 'bgp_neighbor_pass': 'newpass',
+                                 'comment': 'new_comment',
+                                 'interface': 'LAN_HA',
+                                 'neighbor_ip': '192.168.1.25',
+                                 'remote_as': 30}]
+                            }
+        self._test_bgp_as(members, bgp_options, [expected_options],
+                          old_neighbor_ip='192.168.1.10')
+
+    def test_delete_bgp_as(self):
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'bgp_as': [{'as': 2,
+                         'holddown': 15,
+                         'keepalive': 20,
+                         'link_detect': True}
+                        ]}]
+        member_name = 'my_member'
+        expected_options = {'bgp_as': []}
+        connector = mock.Mock()
+        connector.get_object.return_value = members
+
+        om = object_manipulator.InfobloxObjectManipulator(connector)
+        om.delete_bgp_as(member_name)
+
+        connector.get_object.assert_called_once_with(
+            'member', {'host_name': 'my_member'},
+            ['bgp_as'], extattrs=None)
+        connector.update_object.assert_called_once_with(
+            members[0]['_ref'], expected_options)
+
+    def test_create_bgp_neighbor(self):
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'bgp_as': [{'as': 2,
+                         'holddown': 15,
+                         'keepalive': 20,
+                         'link_detect': True,
+                         'neighbors': []}
+                        ]}]
+        bgp_options = {'authentication_mode': 'MD5',
+                       'bgp_neighbor_pass': 'somepass',
+                       'comment': 'comment',
+                       'interface': 'LAN_HA',
+                       'neighbor_ip': '192.168.1.10',
+                       'remote_as': 20}
+        expected_option = {'as': 2,
+                           'holddown': 15,
+                           'keepalive': 20,
+                           'link_detect': True,
+                           'neighbors': [{'authentication_mode': 'MD5',
+                                          'bgp_neighbor_pass': 'somepass',
+                                          'comment': 'comment',
+                                          'interface': 'LAN_HA',
+                                          'neighbor_ip': '192.168.1.10',
+                                          'remote_as': 20,
+                                          }]}
+        self._test_bgp_neighbor(members, bgp_options, [expected_option])
+
+    def test_create_bgp_neighbor_with_existent_neighbor(self):
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'bgp_as': [{'as': 2,
+                         'holddown': 15,
+                         'keepalive': 20,
+                         'link_detect': False,
+                         'neighbors': [{'authentication_mode': 'MD5',
+                                        'bgp_neighbor_pass': 'somepass',
+                                        'comment': 'comment',
+                                        'interface': 'LAN_HA',
+                                        'neighbor_ip': '192.168.1.15',
+                                        'remote_as': 20,
+                                        }]}
+                        ]}]
+        bgp_options = {'authentication_mode': 'MD5',
+                       'bgp_neighbor_pass': 'new_pass',
+                       'comment': 'comment2',
+                       'interface': 'LAN_HA',
+                       'neighbor_ip': '172.23.2.10',
+                       'remote_as': 15}
+        expected_option = {'as': 2,
+                           'holddown': 15,
+                           'keepalive': 20,
+                           'link_detect': False,
+                           'neighbors': [{'authentication_mode': 'MD5',
+                                          'bgp_neighbor_pass': 'somepass',
+                                          'comment': 'comment',
+                                          'interface': 'LAN_HA',
+                                          'neighbor_ip': '192.168.1.15',
+                                          'remote_as': 20,
+                                          },
+                                         {'authentication_mode': 'MD5',
+                                          'bgp_neighbor_pass': 'new_pass',
+                                          'comment': 'comment2',
+                                          'interface': 'LAN_HA',
+                                          'neighbor_ip': '172.23.2.10',
+                                          'remote_as': 15,
+                                          }]}
+        self._test_bgp_neighbor(members, bgp_options, [expected_option])
+
+    def _test_delete_bgp(self, members, neighbor_ip, expected_options):
+        member_name = 'my_member'
+        connector = mock.Mock()
+        connector.get_object.return_value = members
+
+        om = object_manipulator.InfobloxObjectManipulator(connector)
+        om.delete_bgp_neighbor(member_name, neighbor_ip)
+
+        connector.get_object.assert_called_once_with(
+            'member', {'host_name': 'my_member'},
+            ['bgp_as'], extattrs=None)
+        connector.update_object.assert_called_once_with(
+            members[0]['_ref'], expected_options)
+
+    def test_delete_bgp_single(self):
+        neighbor_ip = '192.168.1.15'
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'bgp_as': [{'as': 2,
+                         'holddown': 15,
+                         'keepalive': 20,
+                         'link_detect': False,
+                         'neighbors': [{'authentication_mode': 'MD5',
+                                        'bgp_neighbor_pass': 'somepass',
+                                        'comment': 'comment',
+                                        'interface': 'LAN_HA',
+                                        'neighbor_ip': neighbor_ip,
+                                        'remote_as': 20,
+                                        }]}]}]
+        expected_options = {'bgp_as': [{'as': 2,
+                                        'holddown': 15,
+                                        'keepalive': 20,
+                                        'link_detect': False,
+                                        'neighbors': []}]}
+        self._test_delete_bgp(members, neighbor_ip, expected_options)
+
+    def test_delete_bgp_multiple(self):
+        neighbor_ip = '192.168.1.15'
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'bgp_as': [{'as': 2,
+                         'holddown': 15,
+                         'keepalive': 20,
+                         'link_detect': False,
+                         'neighbors': [{'authentication_mode': 'MD5',
+                                        'bgp_neighbor_pass': 'somepass',
+                                        'comment': 'comment',
+                                        'interface': 'LAN_HA',
+                                        'neighbor_ip': neighbor_ip,
+                                        'remote_as': 20,
+                                        },
+                                       {'authentication_mode': 'MD5',
+                                        'bgp_neighbor_pass': 'new_pass',
+                                        'comment': 'comment2',
+                                        'interface': 'LAN_HA',
+                                        'neighbor_ip': '172.23.2.10',
+                                        'remote_as': 15,
+                                        }]}]}]
+        expected_options = {'bgp_as': [{'as': 2,
+                                        'holddown': 15,
+                                        'keepalive': 20,
+                                        'link_detect': False,
+                                        'neighbors': [
+                                            {'authentication_mode': 'MD5',
+                                             'bgp_neighbor_pass': 'new_pass',
+                                             'comment': 'comment2',
+                                             'interface': 'LAN_HA',
+                                             'neighbor_ip': '172.23.2.10',
+                                             'remote_as': 15,
+                                             }]}]}
+        self._test_delete_bgp(members, neighbor_ip, expected_options)
+
+    def _test_additional_ip_list(self, members, server_ip_list,
+                                 expected_ip_list):
+        self._test_configuration_update('add_member_dns_additional_ip',
+                                        'member:dns', 'additional_ip_list',
+                                        members, server_ip_list,
+                                        expected_ip_list)
+
+    def test_add_member_dns_additional_ip(self):
+        anycast_ip = '192.168.1.15'
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'additional_ip_list': []}]
+        expected_options = [anycast_ip]
+        self._test_additional_ip_list(members, anycast_ip, expected_options)
+
+    def test_add_member_dns_additional_ip_existent_ips(self):
+        anycast_ip = '192.168.1.15'
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'additional_ip_list': ['172.23.23.13']}]
+        expected_options = ['172.23.23.13', anycast_ip]
+        self._test_additional_ip_list(members, anycast_ip, expected_options)
+
+    def _test_remove_ip_list(self, members, server_ip_list,
+                             expected_ip_list):
+        self._test_configuration_update('remove_member_dns_additional_ip',
+                                        'member:dns', 'additional_ip_list',
+                                        members, server_ip_list,
+                                        expected_ip_list)
+
+    def test_remove_member_dns_additional_ip(self):
+        anycast_ip = '192.168.1.15'
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'additional_ip_list': [anycast_ip]}]
+        expected_options = []
+        self._test_remove_ip_list(members, anycast_ip, expected_options)
+
+    def test_remove_member_dns_additional_ip_multiple_ips(self):
+        anycast_ip = '192.168.1.15'
+        members = [
+            {'_ref': u'member/b35lLnZpcnR1YWxa3fskZSQw:master-113.ft-ac.com',
+             'additional_ip_list': ['14.53.23.3', anycast_ip]}]
+        expected_options = ['14.53.23.3']
+        self._test_remove_ip_list(members, anycast_ip, expected_options)

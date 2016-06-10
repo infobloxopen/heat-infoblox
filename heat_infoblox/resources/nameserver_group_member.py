@@ -99,7 +99,7 @@ class NameServerGroupMember(resource.Resource):
     attributes_schema = {
         NS_GROUP: attributes.Schema(
             _('The name server group details.'),
-            type=attributes.Schema.MAP)
+            attributes.Schema.MAP)
     }
 
     def infoblox(self):
