@@ -2,6 +2,9 @@
 heat-infoblox
 ===============================
 
+.. image:: https://travis-ci.org/infobloxopen/heat-infoblox.svg?branch=master
+    :target: https://travis-ci.org/infobloxopen/heat-infoblox
+
 OpenStack Heat resources for integration with Infoblox appliances.
 
 Features
