@@ -197,6 +197,8 @@ class GridMemberTest(common.HeatTestCase):
             '  certificate: |\n    testing\n',
             ud
         )
+        self.my_member._get_member_tokens.assert_called_once_with(
+            self.ipv4_member)
 
     def test_user_data_lan1_ipv4_dhcp_disabled(self):
         dhcp_status = mock.Mock(return_value={'ipv4': False, 'ipv6': True})
@@ -215,10 +217,12 @@ class GridMemberTest(common.HeatTestCase):
             '  certificate: |\n    testing\n',
             ud
         )
+        self.my_member._get_member_tokens.assert_called_once_with(
+            self.ipv4_member)
 
     def test_user_data_lan1_ipv4_dhcp_enabled(self):
         dhcp_status = mock.Mock(return_value={'ipv4': True, 'ipv6': True})
-        self.set_member(self.ipv4_member)
+        self.set_member_obj(self.ipv4_member)
         self.set_token(['abcdefg', 'hijklmnop'])
         self.my_member._get_dhcp_status_for_port = dhcp_status
         ud = self.my_member._resolve_attribute('user_data')
@@ -230,6 +234,8 @@ class GridMemberTest(common.HeatTestCase):
             '  certificate: |\n    testing\n',
             ud
         )
+        self.my_member._get_member_tokens.assert_called_once_with(
+            self.ipv4_member)
 
     def test_user_data_lan1_ipv6(self):
         self.set_member_obj(self.ipv6_member)
@@ -246,6 +252,8 @@ class GridMemberTest(common.HeatTestCase):
             '  certificate: |\n    testing\n',
             ud
         )
+        self.my_member._get_member_tokens.assert_called_once_with(
+            self.ipv6_member)
 
     def test_user_data_lan1_ipv4_6(self):
         self.set_member_obj(self.ipv4_6_member)
@@ -265,6 +273,8 @@ class GridMemberTest(common.HeatTestCase):
             '  certificate: |\n    testing\n',
             ud
         )
+        self.my_member._get_member_tokens.assert_called_once_with(
+            self.ipv4_6_member)
 
     def test_user_data_ipv4_ha(self):
         self.set_member_obj(self.ipv4_ha_member)
@@ -281,6 +291,8 @@ class GridMemberTest(common.HeatTestCase):
             '  certificate: |\n    testing\n',
             ud
         )
+        self.my_member._get_member_tokens.assert_called_once_with(
+            self.ipv4_ha_member)
 
     def test_user_data2_ipv4_ha(self):
         self.set_member_obj(self.ipv4_ha_member)
@@ -297,6 +309,8 @@ class GridMemberTest(common.HeatTestCase):
             '  certificate: |\n    testing\n',
             ud2
         )
+        self.my_member._get_member_tokens.assert_called_once_with(
+            self.ipv4_ha_member)
 
     def test_temp_licenses_none(self):
         self.set_member(self.base_member)
@@ -365,6 +379,12 @@ class GridMemberTest(common.HeatTestCase):
         self.set_token(['a', 'b'])
         ud = self.my_member._resolve_attribute('user_data')
         self.assertTrue('default_admin_password: infoblox\n' in ud)
+
+    def test_resolve_attribute_name(self):
+        self.set_member_obj(self.ipv4_member)
+        name = self.my_member._resolve_attribute('name')
+        self.assertEqual('host.name', name)
+        self.my_member._get_member_tokens.assert_not_called()
 
     def test_handle_create(self):
         self.set_member(self.base_member)

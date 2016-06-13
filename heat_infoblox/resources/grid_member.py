@@ -484,11 +484,12 @@ class GridMember(resource.Resource):
             fail_if_no_member=True,
             return_fields=['host_name', 'vip_setting', 'ipv6_setting',
                            'enable_ha', 'node_info'])
-        token = self._get_member_tokens(member)
         LOG.debug("MEMBER for %s = %s" % (name, member))
         if name == self.USER_DATA:
+            token = self._get_member_tokens(member)
             return self._make_user_data(member, token, 0)
         if name == self.NODE2_USER_DATA:
+            token = self._get_member_tokens(member)
             return self._make_user_data(member, token, 1)
         if name == self.NAME_ATTR:
             return member['host_name']
