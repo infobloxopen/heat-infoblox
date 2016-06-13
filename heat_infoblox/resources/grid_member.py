@@ -26,6 +26,8 @@ from heat.engine import support
 from heat_infoblox import constants
 from heat_infoblox import resource_utils
 
+from oslo_concurrency import lockutils
+
 
 LOG = logging.getLogger(__name__)
 
@@ -371,19 +373,21 @@ class GridMember(resource.Resource):
         # This is a workaround needed because Juno Heat does not honor
         # dependencies in nested autoscale group stacks.
         fields = {'name', 'grid_primary', 'grid_secondaries'}
-        groups = self.infoblox().get_all_ns_groups(return_fields=fields)
-        for group in groups:
-            new_list = {}
-            changed = False
-            for field in ('grid_primary', 'grid_secondaries'):
-                new_list[field] = []
-                for member in group[field]:
-                    if member['name'] != self.resource_id:
-                        new_list[field].append(member)
-                    else:
-                        changed = True
-            if changed:
-                self.infoblox().update_ns_group(group['name'], new_list)
+        with lockutils.lock(self.resource_id, external=True,
+                            lock_file_prefix='infoblox-ns_group-update'):
+            groups = self.infoblox().get_all_ns_groups(return_fields=fields)
+            for group in groups:
+                new_list = {}
+                changed = False
+                for field in ('grid_primary', 'grid_secondaries'):
+                    new_list[field] = []
+                    for member in group[field]:
+                        if member['name'] != self.resource_id:
+                            new_list[field].append(member)
+                        else:
+                            changed = True
+                if changed:
+                    self.infoblox().update_ns_group(group['name'], new_list)
 
     def handle_delete(self):
         if self.resource_id is not None:
