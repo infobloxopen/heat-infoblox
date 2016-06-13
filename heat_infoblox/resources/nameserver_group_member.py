@@ -25,6 +25,8 @@ from heat.engine import support
 from heat_infoblox import constants
 from heat_infoblox import resource_utils
 
+from oslo_concurrency import lockutils
+
 
 LOG = logging.getLogger(__name__)
 
@@ -132,20 +134,24 @@ class NameServerGroupMember(resource.Resource):
         return groups[0]
 
     def handle_create(self):
-        group_name = self.properties[self.GROUP_NAME]
-        group = self._get_ns_group(group_name)
-        LOG.debug("NSGROUP: %s" % group)
+        with lockutils.lock(
+                self.properties[self.MEMBER_SERVER][self.MEMBER_NAME],
+                external=True,
+                lock_file_prefix='infoblox-ns_group-update'):
+            group_name = self.properties[self.GROUP_NAME]
+            group = self._get_ns_group(group_name)
+            LOG.debug("NSGROUP: %s" % group)
 
-        member_role = self.properties[self.MEMBER_ROLE]
-        member = self.properties[self.MEMBER_SERVER]
-        if member_role == 'grid_primary':
-            self._remove_member(group['grid_secondaries'], member)
-            self._add_member(group['grid_primary'], member)
-        elif member_role == 'grid_secondary':
-            self._remove_member(group['grid_primary'], member)
-            self._add_member(group['grid_secondaries'], member)
+            member_role = self.properties[self.MEMBER_ROLE]
+            member = self.properties[self.MEMBER_SERVER]
+            if member_role == 'grid_primary':
+                self._remove_member(group['grid_secondaries'], member)
+                self._add_member(group['grid_primary'], member)
+            elif member_role == 'grid_secondary':
+                self._remove_member(group['grid_primary'], member)
+                self._add_member(group['grid_secondaries'], member)
 
-        self.infoblox().update_ns_group(group_name, group)
+            self.infoblox().update_ns_group(group_name, group)
         self.resource_id_set(
             "%s/%s/%s" % (group_name, member_role, member['name'])
         )
@@ -161,12 +167,16 @@ class NameServerGroupMember(resource.Resource):
         if member_role == 'grid_secondary':
             field_name = 'grid_secondaries'
 
-        group = self._get_ns_group(group_name)
+        with lockutils.lock(
+                self.properties[self.MEMBER_SERVER][self.MEMBER_NAME],
+                external=True,
+                lock_file_prefix='infoblox-ns_group-update'):
+            group = self._get_ns_group(group_name)
 
-        LOG.debug("NSGROUP for DELETE: %s" % group)
-        self._remove_member(group[field_name], member)
-        LOG.debug("NSGROUP update DELETE: %s" % group)
-        self.infoblox().update_ns_group(group_name, group)
+            LOG.debug("NSGROUP for DELETE: %s" % group)
+            self._remove_member(group[field_name], member)
+            LOG.debug("NSGROUP update DELETE: %s" % group)
+            self.infoblox().update_ns_group(group_name, group)
 
     def _resolve_attribute(self, name):
         LOG.debug("RESOLVE ATTRIBUTE: %s" % name)
