@@ -45,7 +45,10 @@ class NameServerGroupMemberTest(common.HeatTestCase):
         heat_infoblox_path = os.path.abspath(os.path.join(
             os.path.dirname(__file__), os.pardir))
         cfg.CONF.import_opt('plugin_dirs', 'heat.common.config')
+        cfg.CONF.import_opt('lock_path', 'oslo_concurrency.lockutils',
+                            group='oslo_concurrency')
         cfg.CONF.set_override('plugin_dirs', heat_infoblox_path)
+        cfg.CONF.set_override('lock_path', '/tmp/', group='oslo_concurrency')
         super(NameServerGroupMemberTest, self).setUp()
 
         self.ctx = utils.dummy_context()
