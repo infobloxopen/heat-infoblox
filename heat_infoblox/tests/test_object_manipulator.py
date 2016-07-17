@@ -37,20 +37,39 @@ MEMBER_WITH_ANYCAST_IP = {
 
 class TestObjectManipulator(testtools.TestCase):
 
-    def _test_create_anycast_loopback(self, ip, expected_anycast_dict):
+    def _test_create_anycast_loopback(self, ip, expected_anycast_dict,
+                                      old_ip=None, ip_list=None):
         member_name = 'member_name'
         connector = mock.Mock()
-        connector.get_object.return_value = [MEMBER_WITH_ANYCAST_IP]
+        member = MEMBER_WITH_ANYCAST_IP.copy()
+        if ip_list:
+            member['additional_ip_list'] = ip_list
+        connector.get_object.return_value = [member]
 
         om = object_manipulator.InfobloxObjectManipulator(connector)
         om.create_anycast_loopback(member_name, ip, enable_bgp=True,
-                                   enable_ospf=True)
+                                   enable_ospf=True, old_ip=old_ip)
 
         connector.get_object.assert_called_once_with(
             'member', {'host_name': member_name},
             ['additional_ip_list'], extattrs=None)
 
         expected_ip_list = MEMBER_WITH_ANYCAST_IP['additional_ip_list'][:]
+        if old_ip:
+            for idx, val in enumerate(expected_ip_list):
+                if ':' in old_ip:
+                    if 'ipv6_network_setting' in val:
+                        check_ip = val['ipv6_network_setting']['virtual_ip']
+                    else:
+                        continue
+                else:
+                    if 'ipv4_network_setting' in val:
+                        check_ip = val['ipv4_network_setting']['address']
+                    else:
+                        continue
+                if check_ip == old_ip:
+                    expected_ip_list.pop(idx)
+                    break
         expected_ip_list.append(expected_anycast_dict)
         connector.update_object.assert_called_once_with(
             MEMBER_WITH_ANYCAST_IP['_ref'],
@@ -77,6 +96,54 @@ class TestObjectManipulator(testtools.TestCase):
                                  'interface': 'LOOPBACK',
                                  'enable_ospf': True}
         self._test_create_anycast_loopback(ip, expected_anycast_dict)
+
+    def test_create_anycast_loopback_old_ip_v4(self):
+        ip = '172.23.25.26'
+        old_ip = '172.252.5.2'
+        ip_list = MEMBER_WITH_ANYCAST_IP['additional_ip_list'][:]
+        ip_list.append(
+            {
+                'anycast': True,
+                'ipv4_network_setting':
+                    {'subnet_mask': '255.255.255.255',
+                     'address': old_ip},
+                'enable_bgp': True,
+                'interface': 'LOOPBACK',
+                'enable_ospf': True
+            })
+        expected_anycast_dict = {'anycast': True,
+                                 'ipv4_network_setting':
+                                     {'subnet_mask': '255.255.255.255',
+                                      'address': ip},
+                                 'enable_bgp': True,
+                                 'interface': 'LOOPBACK',
+                                 'enable_ospf': True}
+        self._test_create_anycast_loopback(ip, expected_anycast_dict,
+                                           old_ip=old_ip, ip_list=ip_list)
+
+    def test_create_anycast_loopback_old_ip_v6(self):
+        ip = 'fffe::5'
+        old_ip = 'fffe::4'
+        ip_list = MEMBER_WITH_ANYCAST_IP['additional_ip_list'][:]
+        ip_list.append(
+            {
+                'anycast': True,
+                'ipv6_network_setting':
+                    {'subnet_mask': 128,
+                     'virtual_ip': old_ip},
+                'enable_bgp': True,
+                'interface': 'LOOPBACK',
+                'enable_ospf': True
+            })
+        expected_anycast_dict = {'anycast': True,
+                                 'ipv6_network_setting':
+                                     {'cidr_prefix': 128,
+                                      'virtual_ip': ip},
+                                 'enable_bgp': True,
+                                 'interface': 'LOOPBACK',
+                                 'enable_ospf': True}
+        self._test_create_anycast_loopback(ip, expected_anycast_dict,
+                                           old_ip=old_ip, ip_list=ip_list)
 
     def _test_delete_anycast_loopback(self, ip, members, expected_calls):
         connector = mock.Mock()

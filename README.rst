@@ -72,6 +72,14 @@ member.
 An example template using this resources is in the doc/templates directory of
 this package.
 
+*Infoblox::Grid::HaPair*
+
+This resource create an HA pair GM, *not* for adding an HA pair to an existing
+grid.
+
+Your should use *Infoblox::Grid::Member* with "ha_pair" set to True to add
+HA pair member into grid.
+
 *Infoblox::Grid::NameServerGroupMember*
 
 This resource represents the membership of a grid member within a name server

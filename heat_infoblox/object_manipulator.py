@@ -189,7 +189,7 @@ class InfobloxObjectManipulator(object):
         self.connector.call_func('join', 'grid', gm_params)
 
     def create_anycast_loopback(self, member_name, ip, enable_bgp=False,
-                                enable_ospf=False):
+                                enable_ospf=False, old_ip=None):
         anycast_loopback = {
             'anycast': True,
             'enable_bgp': enable_bgp,
@@ -214,7 +214,24 @@ class InfobloxObjectManipulator(object):
                         "Anycast Loopback ip %(ip)s"),
                       {'name': member_name, 'ip': ip})
             return
-        additional_ip_list = member['additional_ip_list'] + [anycast_loopback]
+
+        additional_ip_list = []
+        if member and 'additional_ip_list' in member:
+            if old_ip is not None:
+                if ':' in old_ip:
+                    net = 'ipv6_network_setting'
+                    ip_field = 'virtual_ip'
+                else:
+                    net = 'ipv4_network_setting'
+                    ip_field = 'address'
+                for add_ip in member['additional_ip_list']:
+                    if net in add_ip and add_ip[net][ip_field] == old_ip:
+                        continue  # skip old settings
+                    additional_ip_list.append(add_ip)
+            else:
+                additional_ip_list = member['additional_ip_list'][:]
+
+        additional_ip_list.append(anycast_loopback)
 
         payload = {'additional_ip_list': additional_ip_list}
         self._update_infoblox_object_by_ref(member['_ref'], payload)
