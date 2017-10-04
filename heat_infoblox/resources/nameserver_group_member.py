@@ -100,8 +100,7 @@ class NameServerGroupMember(resource.Resource):
 
     attributes_schema = {
         NS_GROUP: attributes.Schema(
-            _('The name server group details.'),
-            attributes.Schema.MAP)
+            _('The name server group details.'))
     }
 
     def infoblox(self):
@@ -185,6 +184,12 @@ class NameServerGroupMember(resource.Resource):
         if name == self.NS_GROUP:
             return group
         return None
+
+
+if 'TYPES' in attributes.Schema.__dict__:
+    grp_key = NameServerGroupMember.NS_GROUP
+    schema_map = attributes.Schema.MAP
+    NameServerGroupMember.attributes_schema[grp_key].type = schema_map
 
 
 def resource_mapping():

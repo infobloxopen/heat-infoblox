@@ -7,7 +7,9 @@ hacking<0.11,>=0.10.0
 bandit>=0.10.1
 coverage>=3.6
 discover
--e git+https://git.openstack.org/openstack/heat.git@stable/liberty#egg=heat
+python-troveclient<2.0.0
+oslo.db<3.0.0
+-e git+https://git.openstack.org/openstack/heat.git@liberty-eol#egg=heat
 mock>=1.2
 mox>=0.5.3
 mox3>=0.7.0
@@ -19,3 +21,4 @@ testrepository>=0.0.18
 testscenarios>=0.4
 testtools!=1.2.0,>=0.9.36
 tox>=2.1.1
+retrying

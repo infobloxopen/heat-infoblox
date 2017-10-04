@@ -1,0 +1,105 @@
+heat_template_version: 2014-10-16
+
+description: An Infoblox Grid Member
+
+parameters:
+  external_network:
+    type: string
+    description: the external network for floating IP allocations
+    default: public
+  wapi_url:
+    type: string
+    description: the URL to access the GM WAPI from the Heat engine
+  wapi_username:
+    type: string
+    description: the username for the WAPI access
+  wapi_password:
+    type: string
+    description: the username for the WAPI access
+  wapi_sslverify:
+    type: string
+    description: the value for SSL Verify (true/false/certificate path)
+    default: false
+  gm_lan1_ip:
+    type: string
+    description: the LAN1 IP of the GM, to be used by members for joining the grid
+  gm_cert:
+    type: string
+    description: the GM certificate contents
+  parent_stack_id:
+    type: string
+    description: the stack ID of the calling stack
+
+
+resources:
+  host_name:
+    type: OS::Heat::RandomString
+    properties:
+      length: 12
+      sequence: lowercase
+
+  mgmt_port:
+    type: OS::Neutron::Port
+    properties:
+      network: mgmt
+      fixed_ips:
+        - { subnet: mgmt_net }
+      security_groups: [ permissive-secgroup ]
+
+  lan1_port:
+    type: OS::Neutron::Port
+    properties:
+      network: lan1
+      fixed_ips:
+        - { subnet: lan1_net }
+      security_groups: [ permissive-secgroup ]
+
+# Each member needs a floating IP so Ceilometer can poll the member for QPS on Non-SRIOV server.
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: external_network }
+      port_id: { get_resource: lan1_port }
+
+
+  grid_member:
+    type: Infoblox::Grid::Member
+    properties:
+      name: { list_join: [ '.', [{ list_join: [ '-', [ 'autoscale-dns', { get_resource: host_name } ]] }, 'localdomain' ]] }
+      connection:
+        url: { get_param: wapi_url }
+        username: { get_param: wapi_username }
+        password: { get_param: wapi_password }
+        sslverify: { get_param: wapi_sslverify }
+      model: IB-FLEX
+      hardware_type: IB-FLEX
+      MGMT: { get_resource: mgmt_port }
+      LAN1: { get_resource: lan1_port }
+      dns: { enable: True }
+      tp: { enable: True }
+      # dca: { enable: True }
+      gm_ip: { get_param: gm_lan1_ip }
+      gm_certificate: { get_param: gm_cert }
+      remote_console_enabled: true
+      admin_password: infoblox
+      # Fields for VPN over MGMT
+      member_join_intf: MGMT
+      use_vpn_mgmt: True
+
+  server:
+    type: OS::Nova::Server
+    properties:
+      name: { list_join: [ '-', [ 'autoscale-dns', { get_resource: host_name } ] ] }
+      flavor: IB-Flex-Minimum
+      image: MAIN_358950
+      networks:
+        - { port: { get_resource: mgmt_port } }
+        - { port: { get_resource: lan1_port } }
+      config_drive: true
+      user_data_format: RAW
+      user_data: { get_attr: [grid_member, user_data] }
+      # By default, SNMP polling is done on the first floating IP found for a given instance
+      # To override that, you can specify an IP in the infoblox-snmp-ip metadata item.
+      metadata: { "metering.stack": { get_param: parent_stack_id }, 'infoblox': 'true' }
+      # On Mitaka and Newton OS versions
+      user_data_update_policy: IGNORE			

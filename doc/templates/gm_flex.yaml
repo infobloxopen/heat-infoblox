@@ -1,0 +1,65 @@
+heat_template_version: 2015-04-30
+
+parameters:
+  imageName:
+    type: string
+    label: Image
+    description: Image
+    constraints:
+      - custom_constraint: glance.image
+        description: Must identify an image known to Glance
+
+resources:
+  GMmgmtPort:
+    type: OS::Neutron::Port
+    properties:
+      network: mgmt
+      fixed_ips:
+      - { subnet: mgmt_net }
+      security_groups: [permissive-secgroup]
+
+  GMlan1Port:
+    type: OS::Neutron::Port
+    properties:
+      network: lan1
+      fixed_ips:
+      - { subnet: lan1_net }
+      security_groups: [permissive-secgroup]
+
+  lan1FloatingIP:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: public-52-net
+      port_id: { get_resource: GMlan1Port }
+
+  Gridmaster:
+    type: OS::Nova::Server
+    properties:
+      image: { get_param: imageName }
+      flavor: IB-Flex-Minimum
+      name: flexmaster.infoblox.com
+      networks:
+      - { port: { get_resource: GMmgmtPort } }
+      - { port: { get_resource: GMlan1Port } }
+      config_drive: true
+      user_data_format: RAW
+      user_data:
+        str_replace:
+          template: |
+            #infoblox-config
+            remote_console_enabled: y
+            hardware_type: IB-FLEX
+            temp_license: flex_grid
+            lan1:
+              v4_addr: lan1_address
+              v4_netmask: 255.255.255.0
+              v4_gw: lan1_gateway
+            #mgmt:
+            #  v4_addr: mgmt_address
+            #  v4_netmask: 255.255.255.0
+            #  v4_gw: mgmt_gateway
+          params:
+            lan1_address: { get_attr: [GMlan1Port, fixed_ips, 0, ip_address] }
+            lan1_gateway: { get_attr: [GMlan1Port, subnets, 0, gateway_ip] }
+            #mgmt_address: { get_attr: [GMmgmtPort, fixed_ips, 0, ip_address] }
+            #mgmt_gateway: { get_attr: [GMmgmtPort, subnets, 0, gateway_ip] }

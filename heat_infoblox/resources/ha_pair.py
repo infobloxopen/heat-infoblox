@@ -125,12 +125,11 @@ class HaPair(resource.Resource):
 
     attributes_schema = {
         NAME_ATTR: attributes.Schema(
-            _('The member name.'),
-            attributes.Schema.STRING)
+            _('The member name.'))
     }
 
     def node(self, ip, username, password, sslverify=False, max_retries=30):
-        conn = {'url': 'https://%s/wapi/v2.3/' % ip,
+        conn = {'url': 'https://%s/wapi/v2.6/' % ip,
                 'username': username,
                 'password': password,
                 'sslverify': sslverify,
@@ -222,6 +221,9 @@ class HaPair(resource.Resource):
         node2.join_grid('Infoblox', ipv4_vip, 'test')
         name = self.properties[self.NAME]
         self.resource_id_set(name)
+
+if 'TYPES' in attributes.Schema.__dict__:
+    HaPair.attributes_schema[HaPair.NAME_ATTR].type = attributes.Schema.STRING
 
 
 def resource_mapping():
